@@ -5,6 +5,7 @@
 setwd("~/Documents/Omics_Integration/Proteomic_analysis/")
 
 library("limma")
+library("dplyr")
 library("edgeR")
 library("Biobase")
 
@@ -40,7 +41,7 @@ samples <- merge(samples_full, metadata[,c(1,11,13,14)])
 
 colnames(samples)[colnames(samples)=="case_control_other_at_baseline"] <- "condition" 
 
-samples <- samples %>% select(participant_id, sample_id, condition, sex, age_at_baseline, visit_month)
+samples <- samples %>% dplyr::select(participant_id, sample_id, condition, sex, age_at_baseline, visit_month)
 
 samples$condition <- factor(samples$condition)
 
@@ -136,7 +137,7 @@ is.fullrank(design)
 #corfit <- duplicateCorrelation(full_normalized_counts, design, block = samples$participant_id)
 
 # Ver correlación estimada
-corfit$consensus.correlation
+#corfit$consensus.correlation
 
 
 # Ajuste del modelo con correlación intra-individuo
@@ -163,10 +164,10 @@ top_prots_1<- top_prots_1 %>% filter(abs(logFC)>=0.2, P.Value <=0.05)
 
 print(top_prots_1)
 
-#saveRDS(top_prots_1, "differential_expression_proteins.rds")
+saveRDS(top_prots_1, "~/Documents/Omics_Integration/Proteomic_analysis/Results/differential_expression_proteins_CSF.rds")
 ################################################################################
 
-top_prots_1 <- readRDS("~/Documents/Omics_Integration/Proteomic_analysis/Results/differential_expression_proteins_CSF.rds")
+# top_prots_1 <- readRDS("~/Documents/Omics_Integration/Proteomic_analysis/Results/differential_expression_proteins_CSF.rds")
 # Crear una nueva columna 'Category' e inicializarla como 'Unknown'
 top_prots_1$Category <- "Unknown"
 

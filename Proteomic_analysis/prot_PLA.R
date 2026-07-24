@@ -4,10 +4,9 @@
 setwd("~/Documents/Parkinson/proteomic/")
 
 library("limma")
+library("dplyr")
 library("DESeq2")
-library("tidyverse")
 library("edgeR")
-
 
 samples_full <- read.csv(file="Targeted olink/proteomics-PLA-PPEA-D03/releases_2023_v4release_1027_proteomics-PLA-PPEA-D03_proteomics_PLA-PPEA-D03_samples.csv")
 glossary <- read.csv(file="Targeted olink/proteomics-PLA-PPEA-D03/releases_2023_v4release_1027_proteomics-PLA-PPEA-D03_ColumnHeaderGlossary.csv")
@@ -43,7 +42,7 @@ samples <- merge(samples_full, metadata[,c(1,11,13,14)])
 
 colnames(samples)[colnames(samples)=="case_control_other_at_baseline"] <- "condition" 
 
-samples <- samples %>% select(participant_id, sample_id, condition, sex, age_at_baseline, visit_month)
+samples <- samples %>% dplyr::select(participant_id, sample_id, condition, sex, age_at_baseline, visit_month)
 
 samples$condition <- factor(samples$condition)
 
@@ -52,7 +51,7 @@ rownames(samples) <- samples$sample_id
 # To check how many cases and how many controls
 samples_filtrado <- samples %>%
   group_by(participant_id) %>%
-  slice(1) %>%
+  dplyr::slice(1) %>%
   ungroup()
 
 
@@ -165,7 +164,7 @@ top_prots_1<- top_prots_1 %>% filter(abs(logFC)>=0.2, P.Value <=0.05)
 
 print(top_prots_1)
 
-#saveRDS(top_prots_1, "differential_expression_proteins_PLA.rds")
+saveRDS(top_prots_1, "~/Documents/Omics_Integration/Proteomic_analysis/Results/differential_expression_proteins_PLA.rds")
 ################################################################################
 
 # Crear una nueva columna 'Category' e inicializarla como 'Unknown'
@@ -207,7 +206,7 @@ filtered_proteins$sample_id <- rownames(filtered_proteins)
 filtered_proteins_metadata <- merge(filtered_proteins, samples, by.x ="sample_id", by.y="sample_id")
 
 #Remove all external info, only keeping id and visit_month 
-filtered_proteins_metadata <- filtered_proteins_metadata %>% select(participant_id, visit_month, all_of(results_proteomics))
+filtered_proteins_metadata <- filtered_proteins_metadata %>% dplyr::select(participant_id, visit_month, all_of(results_proteomics))
 
-saveRDS(filtered_proteins_metadata, "filtered_proteins_metadata_PLA.rds")
+saveRDS(filtered_proteins_metadata, "~/Documents/Omics_Integration/Proteomic_analysis/Results/filtered_proteins_metadata_PLA.rds")
 

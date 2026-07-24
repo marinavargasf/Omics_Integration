@@ -221,7 +221,26 @@ structure <- subset(structure, structure$node_names %in% selected_vars)
 png("PLA_proteins_clinical_top10.png", width = 1800, height = 1000, res = 500)
 
 # Generate the qgraph plot
-qgraph(submatrix,  vsize = 4,  groups = structure$community_structure,  layout=layout_fixed, color=c("lightgreen", "lightblue","orange","#B9AEDC","pink","grey"), legend.cex = 0.2, labels = colnames(submatrix)) 
+# qgraph(submatrix,  vsize = 4,  groups = structure$community_structure,  layout=layout_fixed, color=c("lightgreen", "lightblue","orange","#B9AEDC","pink","grey"), legend.cex = 0.2, labels = colnames(submatrix)) 
+
+el <- make_edge_labels(submatrix, threshold = 2)
+ec_labels <- make_edge_colors(el)                     # for label text (unchanged)
+ec_lines  <- make_edge_colors_gradient(submatrix, exponent = 1.6)      # for edge lines (independent
+
+qgraph(submatrix, 
+       vsize = 4,  
+       groups = structure$community_structure,  
+       layout = layout_fixed, 
+       color = c("lightgreen", "lightblue","orange","#B9AEDC","pink","grey"), 
+       legend.cex = 0.2,
+       labels = colnames(submatrix),
+       edge.labels = el,
+       edge.label.cex = 0.5,
+       edge.label.font = 2,
+       edge.label.color = ec_labels,
+       edge.color = ec_lines,     # <- custom gradient, bypasses cut entirely
+       fade = FALSE,              # <- turn off qgraph's own fade, since we're supplying colors directly
+       label.cex = 1.2)
 
 
 # Close the graphics device
@@ -279,6 +298,8 @@ variables_to_scale <- c("UPDRS1", "UPDRS2", "UPDRS3", "UPDRS4", "MOCA", "Mobilit
                         "ADL39", "Emotional39", "Stigma39", "Social39", "Cognition39", 
                         "Communication39", "Discomfort39", "Schwad_ADL", "ESS", "UPSIT",
                         common_proteins)
+
+structure <- data.frame(node_names, community_structure)
 
 structure <- subset(structure, structure$node_names %in% variables_to_scale)
 
@@ -376,13 +397,32 @@ qgraph(symm_score,  groups = structure$community_structure,  layout="spring", co
 setwd("~/Documents/Omics_Integration/Proteomic_analysis/Results/")
 
 png("PLA_commonCSF_allproteins.png", width = 1800, height = 1200, res = 500)
-qgraph(symm_score,
-       vsize = 4,
-       groups = structure_common_full$community_structure,
-       layout = layout_fixed_2,
-       color = c("lightgreen", "lightblue", "orange", "#B9AEDC", "pink", "grey"),
+# qgraph(symm_score,
+#        vsize = 4,
+#        groups = structure_common_full$community_structure,
+#        layout = layout_fixed_2,
+#        color = c("lightgreen", "lightblue", "orange", "#B9AEDC", "pink", "grey"),
+#        legend.cex = 0.2,
+#        labels = colnames(symm_score))
+el <- make_edge_labels(symm_score, threshold = 2)
+ec_labels <- make_edge_colors(el)                     # for label text (unchanged)
+ec_lines  <- make_edge_colors_gradient(symm_score, exponent = 1.6)      # for edge lines (independent
+
+qgraph(symm_score, 
+       vsize = 4,  
+       groups = structure$community_structure,  
+       layout = layout_fixed_2, 
+       color = c("lightgreen", "lightblue","orange","#B9AEDC","pink","grey"), 
        legend.cex = 0.2,
-       labels = colnames(symm_score))
+       labels = colnames(symm_score),
+       edge.labels = el,
+       edge.label.cex = 0.5,
+       edge.label.font = 2,
+       edge.label.color = ec_labels,
+       edge.color = ec_lines,     # <- custom gradient, bypasses cut entirely
+       fade = FALSE,              # <- turn off qgraph's own fade, since we're supplying colors directly
+       label.cex = 1.2)
+
 dev.off()
 
 # Step 8: Save matrix

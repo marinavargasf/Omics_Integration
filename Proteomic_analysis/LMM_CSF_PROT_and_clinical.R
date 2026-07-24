@@ -225,8 +225,26 @@ setwd("~/Documents/Omics_Integration/Proteomic_analysis/Results/")
 png("CSF_proteins_clinical_top10.png", width = 1800, height = 1000, res = 500)
 
 # Generate the qgraph plot
-qgraph(submatrix, vsize = 4,  groups = structure$community_structure,  layout=layout_fixed, color=c("lightgreen", "lightblue","orange","#B9AEDC","pink","grey"), legend.cex = 0.2, labels = colnames(submatrix)) 
-#qgraph(submatrix, vsize = 4,  groups = structure$community_structure, color=c("lightgreen", "lightblue","orange","#B9AEDC","pink","grey"), legend.cex = 0.2, labels = colnames(submatrix)) 
+# qgraph(submatrix, vsize = 4,  groups = structure$community_structure,  layout=layout_fixed, color=c("lightgreen", "lightblue","orange","#B9AEDC","pink","grey"), legend.cex = 0.2, labels = colnames(submatrix))
+
+el <- make_edge_labels(submatrix, threshold = 1.6)
+ec_labels <- make_edge_colors(el)                     # for label text (unchanged)
+ec_lines  <- make_edge_colors_gradient(submatrix, exponent = 1.6)      # for edge lines (independent
+
+qgraph(submatrix, 
+       vsize = 4,  
+       groups = structure$community_structure,  
+       layout = layout_fixed, 
+       color = c("lightgreen", "lightblue","orange","#B9AEDC","pink","grey"), 
+       legend.cex = 0.2,
+       labels = colnames(submatrix),
+       edge.labels = el,
+       edge.label.cex = 0.5,
+       edge.label.font = 2,
+       edge.label.color = ec_labels,
+       edge.color = ec_lines,     # <- custom gradient, bypasses cut entirely
+       fade = FALSE,              # <- turn off qgraph's own fade, since we're supplying colors directly
+       label.cex = 1.2)
 
 
 # Close the graphics device
