@@ -2,7 +2,7 @@
 # Normalized (batch-corrected) expression matrix + metadata, aligned to the same
 # samples/genes used in 02_rnaseq_2026.R's DESeq2 run.
 #########################################################################################################
-
+setwd("~/Documents/Omics_Integration/Transcriptomic_analysis/DEA2026/")
 start_time <- Sys.time()
 cat("Start time is: ", format(start_time), "\n")
 
@@ -96,6 +96,60 @@ saveRDS(metadata, file = "normalized_metadata.rds")
 saveRDS(normExpr, file = "normalized_expression.rds")
 
 cat("Normalization done. Samples:", ncol(normExpr), "| Genes:", nrow(normExpr), "\n")
+
+end_time <- Sys.time()
+cat("Time taken for analysis: ", format(end_time - start_time), "\n")
+
+
+################################################################################
+##################### Translate to gene symbol (HGNC) #########################
+################################################################################
+
+#normExpr <- readRDS("~/Documents/Omics_Integration/Transcriptomic_analysis/DEA2026/results/Results_rnaseq/normalized_expression.rds")
+
+ensembl <- useEnsembl(biomart = "ensembl", dataset = "hsapiens_gene_ensembl")
+
+ensembl_ids <- rownames(normExpr)
+gene_mapping <- getBM(
+  attributes = c("ensembl_gene_id", "hgnc_symbol"),
+  filters = "ensembl_gene_id",
+  values = ensembl_ids,
+  mart = ensembl
+)
+
+annotations <- data.frame(ensembl_gene_id = ensembl_ids, gene_name = NA, stringsAsFactors = FALSE)
+match_idx <- match(annotations$ensembl_gene_id, gene_mapping$ensembl_gene_id)
+annotations$gene_name <- gene_mapping$hgnc_symbol[match_idx]
+
+stopifnot(nrow(annotations) == nrow(normExpr))
+
+normExpr_df <- as.data.frame(normExpr)
+normExpr_df$gene_name <- annotations$gene_name
+missing_symbol <- is.na(normExpr_df$gene_name) | normExpr_df$gene_name == ""
+normExpr_df$gene_name[missing_symbol] <- rownames(normExpr_df)[missing_symbol]
+
+# duplicate gene symbols: keep the row with highest mean expression across samples
+# (alternative: highest variance -- more relevant if this feeds a correlation/
+# network step where variability matters more than absolute level; swap the
+# ranking metric below if that's a better fit for MariNET)
+expr_cols <- setdiff(colnames(normExpr_df), "gene_name")
+normExpr_df$mean_expr <- rowMeans(normExpr_df[, expr_cols])
+
+data_ordered <- normExpr_df[order(normExpr_df$mean_expr, decreasing = TRUE), ]
+data_ordered <- data_ordered[!duplicated(data_ordered$gene_name), ]
+data_ordered <- data_ordered[!is.na(data_ordered$gene_name), ]
+
+rownames(data_ordered) <- data_ordered$gene_name
+data_ordered <- data_ordered[, expr_cols]
+
+normExpr_genesymbol <- as.matrix(data_ordered)
+
+saveRDS(normExpr_genesymbol, file = "./results/Results_rnaseq/normalized_expression_genesymbol.rds")
+
+n_unmapped <- sum(missing_symbol)
+cat("Gene symbol translation done. Genes:", nrow(normExpr_genesymbol),
+    "(from", nrow(normExpr), "Ensembl IDs;", n_unmapped, "had no HGNC symbol and kept their Ensembl ID;",
+    "duplicate symbols were collapsed to the highest-mean-expression row)\n")
 
 end_time <- Sys.time()
 cat("Time taken for analysis: ", format(end_time - start_time), "\n")
