@@ -13,13 +13,13 @@ library(utils)
 setwd("~/Documents/Omics_Integration/Proteomic_analysis/")
 
 #Run required previous scripts
-
+source("~/Documents/Omics_Integration/Proteomic_analysis/fixed_layout.R")
 source("~/Documents/Parkinson/clinical_metadata_v4_2023/DataReading_v4.R")
 source("~/Documents/Parkinson/data_processing.R") 
 
 
 #1. Collect and filter data 
-data_normalized <- as.data.frame(readRDS("~/Documents/Omics_Integration/Proteomic_analysis/Results/filtered_proteins_metadata_PLA_SYMBOL.rds")) 
+data_normalized <- as.data.frame(readRDS("~/Documents/Omics_Integration/Proteomic_analysis/Results_full_aligned/filtered_proteins_metadata_PLA_SYMBOL.rds")) 
 proteins <- colnames(data_normalized)[-c(1,2)]
 
 # View(metadata)
@@ -40,9 +40,13 @@ master_matrix <- master_matrix %>% select(participant_id, visit_month, study, di
                                           ,pdq39_discomfort_score, Schwad_ADL_score, REM_score, ess_sleepiness_score, upsit_total_score
                                           ,c(proteins))
 # Select node names
-node_names <- c("participant_id", "visit_month", "study", "diagnosis_at_baseline", "age_at_baseline", "sex", "race", "case_control_other_at_baseline", "global_famhistory", "GBA_mut", "LRRK2_mut"
-                ,"SNCA_mut", "APOE_E4_mut", "PD_Mut", "levodopa", "dopamine", "other_med", "UPDRS1", "UPDRS2", "UPDRS3", "UPDRS4", "MOCA", "Mobility39", "ADL39","Emotional39", "Stigma39", "Social39", "Cognition39","Communication39","Discomfort39", "Schwad_ADL", "REM", "ESS", "UPSIT"
-                ,proteins)
+node_names <- c("participant_id", "visit_month", "study", "diagnosis_at_baseline", "age_at_baseline",
+                 "sex", "race", "case_control_other_at_baseline", "global_famhistory",
+                 "levodopa", "dopamine", "other_med",
+                 "GBA_mut", "LRRK2_mut", "SNCA_mut", "APOE_E4_mut", "PD_Mut",
+                 "UPDRS1", "UPDRS2", "UPDRS3", "UPDRS4", "MOCA", "Mobility39", "ADL39", "Emotional39",
+                 "Stigma39", "Social39", "Cognition39", "Communication39", "Discomfort39", "Schwad_ADL",
+                 "REM", "ESS", "UPSIT", proteins)
 colnames(master_matrix) <- node_names
 
 # Induce community structure, and create dataset which contains this information
@@ -171,15 +175,22 @@ qgraph(symm_score,  groups = structure$community_structure,  layout="spring", co
 
 
 #To save image!!
-setwd("~/Documents/Omics_Integration/Proteomic_analysis/Results/")
+setwd("~/Documents/Omics_Integration/Proteomic_analysis/Results_full_aligned/")
 
-# Open a PNG graphics device
+# ------------------------------------------------------------------------
+# PLA_proteins_clinical plot -- PNG, SVG, PDF
+# ------------------------------------------------------------------------
+
 png("PLA_proteins_clinical.png", width = 1800, height = 1000, res = 500)
-
-# Generate the qgraph plot
 qgraph(symm_score, vsize = 3,  groups = structure$community_structure,  layout="spring", color=c("lightgreen", "lightblue","orange","#B9AEDC","pink","grey"), legend.cex = 0.2, labels = colnames(symm_score)) 
+dev.off()
 
-# Close the graphics device
+svg("PLA_proteins_clinical.svg", width = 1800/500, height = 1000/500)
+qgraph(symm_score, vsize = 3,  groups = structure$community_structure,  layout="spring", color=c("lightgreen", "lightblue","orange","#B9AEDC","pink","grey"), legend.cex = 0.2, labels = colnames(symm_score)) 
+dev.off()
+
+pdf("PLA_proteins_clinical.pdf", width = 1800/500, height = 1000/500)
+qgraph(symm_score, vsize = 3,  groups = structure$community_structure,  layout="spring", color=c("lightgreen", "lightblue","orange","#B9AEDC","pink","grey"), legend.cex = 0.2, labels = colnames(symm_score)) 
 dev.off()
 
 # Write output
@@ -194,16 +205,15 @@ write.csv(score_df, "PLA_proteins_clinical_score_matrix.csv")
 
 
 # Paso 1: Calcular la suma de interacciones por nodo (suma por fila o columna, es igual porque es simétrico)
-node_strength <- rowSums(abs(symm_score[proteins,]))
+node_strength <- apply(abs(symm_score[proteins, ]), 1, max)
 
-# Paso 2: Convertirlo a dataframe
 strength_df <- data.frame(
   node = names(node_strength),
   strength = node_strength
 )
 
-# Paso 4: Filtrar solo "protein expression" y seleccionar los 10 más conectados
 top10_proteins <- rownames(strength_df[order(-strength_df$strength), ][1:10, ])
+print(top10_proteins)
 
 
 # Resultado: nodos de proteína más conectados
@@ -217,34 +227,46 @@ selected_vars <- c("UPDRS1", "UPDRS2", "UPDRS3", "UPDRS4", "MOCA", "Mobility39",
 submatrix <- symm_score[selected_vars, selected_vars]
 structure <- subset(structure, structure$node_names %in% selected_vars)
 
-# Open a PNG graphics device
-png("PLA_proteins_clinical_top10.png", width = 1800, height = 1000, res = 500)
+# ------------------------------------------------------------------------
+# PLA_proteins_clinical_top10 plot -- PNG, SVG, PDF
+# ------------------------------------------------------------------------
 
-# Generate the qgraph plot
-# qgraph(submatrix,  vsize = 4,  groups = structure$community_structure,  layout=layout_fixed, color=c("lightgreen", "lightblue","orange","#B9AEDC","pink","grey"), legend.cex = 0.2, labels = colnames(submatrix)) 
+el <- make_edge_labels(submatrix, threshold = 1.6)
+ec_labels <- make_edge_colors(el)
+ec_lines  <- make_edge_colors_gradient(submatrix, exponent = 1.6)
 
-el <- make_edge_labels(submatrix, threshold = 2)
-ec_labels <- make_edge_colors(el)                     # for label text (unchanged)
-ec_lines  <- make_edge_colors_gradient(submatrix, exponent = 1.6)      # for edge lines (independent
+fig_w <- 10     # inches
+fig_h <- 7.5    # inches
 
-qgraph(submatrix, 
-       vsize = 4,  
-       groups = structure$community_structure,  
-       layout = layout_fixed, 
-       color = c("lightgreen", "lightblue","orange","#B9AEDC","pink","grey"), 
-       legend.cex = 0.2,
-       labels = colnames(submatrix),
-       edge.labels = el,
-       edge.label.cex = 0.5,
-       edge.label.font = 2,
-       edge.label.color = ec_labels,
-       edge.color = ec_lines,     # <- custom gradient, bypasses cut entirely
-       fade = FALSE,              # <- turn off qgraph's own fade, since we're supplying colors directly
-       label.cex = 1.2)
+plot_net <- function(mat, layout, groups = structure$community_structure) {
+  qgraph(mat,
+         vsize = 4,
+         groups = groups,
+         layout = layout,
+         color = c("lightgreen", "lightblue", "orange", "#B9AEDC", "pink", "grey"),
+         legend.cex = 0.45,
+         labels = colnames(mat),
+         edge.labels = el,
+         edge.label.cex = 0.7,
+         edge.label.font = 2,
+         edge.label.color = ec_labels,
+         edge.color = ec_lines,
+         fade = FALSE,
+         label.cex = 1.2)
+}
 
+lay <- network_layout(submatrix)
 
-# Close the graphics device
-dev.off()
+png("PLA_proteins_clinical_top10.png", width = fig_w, height = fig_h, units = "in", res = 300)
+plot_net(submatrix, lay); dev.off()
+
+svg("PLA_proteins_clinical_top10.svg", width = fig_w, height = fig_h)
+plot_net(submatrix, lay); dev.off()
+
+pdf("PLA_proteins_clinical_top10.pdf", width = fig_w, height = fig_h)
+plot_net(submatrix, lay); dev.off()
+
+setwd("~/Documents/Omics_Integration/Proteomic_analysis/Results_full_aligned/")
 
 score_output <- as.data.frame(submatrix)
 score_output<- cbind(row_names = rownames(score_output), score_output)
@@ -259,12 +281,12 @@ library(readr)
 
 setwd("~/Documents/Omics_Integration/Proteomic_analysis/")
 # Step 1: Load CSF score matrix to extract CSF protein names
-csf_normalized <- as.data.frame(readRDS("~/Documents/Omics_Integration/Proteomic_analysis/Results/filtered_proteins_metadata_CSF_SYMBOL.rds")) 
+csf_normalized <- as.data.frame(readRDS("~/Documents/Omics_Integration/Proteomic_analysis/Results_full_aligned/filtered_proteins_metadata_CSF_SYMBOL.rds")) 
 csf_proteins<- colnames(data_normalized)[-c(1,2)]
 
 # top_prots_1<-readRDS("proteomic/differential_expression_proteins.rds")
 
-csf_score <- read.csv("~/Documents/Omics_Integration/Proteomic_analysis/Results/CSF_proteins_clinical_score_matrix.csv", row.names=1)
+csf_score <- read.csv("~/Documents/Omics_Integration/Proteomic_analysis/Results_full_aligned/CSF_proteins_clinical_score_matrix.csv", row.names=1)
 csf_score <- csf_score[, -1] #Duplicated row 
 csf_proteins <- colnames(csf_score)[-(1:16)]  # remove clinical vars
 
@@ -330,10 +352,10 @@ for (dependent_variable in dependent_variables) {
   #if (dependent_variable)
   
   if (structure$community_structure[structure$node_names==dependent_variable] == "Protein expression"){
-    formula <- as.formula(paste(dependent_variable,  "~ ", variables_string_filtered, "+ (1|participant_id)"))
+    formula <- as.formula(paste(dependent_variable,  "~ ", variables_string_filtered, " + (1|sex) + (1|participant_id) + (1|age_at_baseline)"))
   }
   else{
-    formula <- as.formula(paste(dependent_variable, "~ ", variables_string, "+ (1|participant_id)"))
+    formula <- as.formula(paste(dependent_variable, "~ ", variables_string, "+ (1|sex) + (1|participant_id) + (1|age_at_baseline)"))
   }
   # Create and fit the model
   model <- glmer(formula, data = long_visit)
@@ -394,36 +416,26 @@ for (i in 1:nrow(symm_score)) {
 qgraph(symm_score,  groups = structure$community_structure,  layout="spring", color=c("lightgreen", "lightblue","orange","#B9AEDC","pink","grey")  ) 
 
 # Step 7: Plot
-setwd("~/Documents/Omics_Integration/Proteomic_analysis/Results/")
+setwd("~/Documents/Omics_Integration/Proteomic_analysis/Results_full_aligned/")
 
-png("PLA_commonCSF_allproteins.png", width = 1800, height = 1200, res = 500)
-# qgraph(symm_score,
-#        vsize = 4,
-#        groups = structure_common_full$community_structure,
-#        layout = layout_fixed_2,
-#        color = c("lightgreen", "lightblue", "orange", "#B9AEDC", "pink", "grey"),
-#        legend.cex = 0.2,
-#        labels = colnames(symm_score))
 el <- make_edge_labels(symm_score, threshold = 2)
 ec_labels <- make_edge_colors(el)                     # for label text (unchanged)
 ec_lines  <- make_edge_colors_gradient(symm_score, exponent = 1.6)      # for edge lines (independent
 
-qgraph(symm_score, 
-       vsize = 4,  
-       groups = structure$community_structure,  
-       layout = layout_fixed_2, 
-       color = c("lightgreen", "lightblue","orange","#B9AEDC","pink","grey"), 
-       legend.cex = 0.2,
-       labels = colnames(symm_score),
-       edge.labels = el,
-       edge.label.cex = 0.5,
-       edge.label.font = 2,
-       edge.label.color = ec_labels,
-       edge.color = ec_lines,     # <- custom gradient, bypasses cut entirely
-       fade = FALSE,              # <- turn off qgraph's own fade, since we're supplying colors directly
-       label.cex = 1.2)
+# ------------------------------------------------------------------------
+# PLA_commonCSF_allproteins plot -- PNG, SVG, PDF
+# ------------------------------------------------------------------------
+lay <- network_layout(symm_score)
 
-dev.off()
+png("PLA_commonCSF_allproteins.png", width = fig_w, height = fig_h, units = "in", res = 300)
+plot_net(symm_score, lay); dev.off()
+
+svg("PLA_commonCSF_allproteins.svg", width = fig_w, height = fig_h)
+plot_net(symm_score, lay); dev.off()
+
+pdf("PLA_commonCSF_allproteins.pdf", width = fig_w, height = fig_h)
+plot_net(symm_score, lay); dev.off()
+
 
 # Step 8: Save matrix
 score_output_common <- as.data.frame(symm_score)
