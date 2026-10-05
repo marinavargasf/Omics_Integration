@@ -17,14 +17,17 @@ source("~/Documents/Parkinson/clinical_metadata_v4_2023/DataReading_v4.R")
 source("~/Documents/Parkinson/shifted_matrix.R")
 source("~/Documents/Parkinson/data_processing.R")
 
-setwd("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/")
+setwd("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results_HB/") #or results!
 
 #1. Collect and filter data 
-scores <- readRDS("./Results/pathwayScores_samplesFiltered_GO.rds")
+scores <- readRDS("pathwayScores_samplesFiltered_GO.rds")
 rownames(scores) <- scores$term
 scores <- scores[, !(colnames(scores) %in% c("ID", "term"))]
 
-NES <- readRDS("./Results/nes_GO.RDS")
+NES <- readRDS("nes_GO.RDS")
+
+# traslation was previously relied upon as a loaded workspace object 
+traslation <- readRDS("pathway_id_term_translation.rds")
 
 NES <- NES%>%
   left_join(traslation, by = c("pathway" = "ID")) # Usa la columna ID como clave
@@ -54,16 +57,28 @@ selected_pathways$visit_month <- recode(selected_pathways$time,
                                "BLM0T1" = 0,
                                "BLM0T1.1" = 0,
                                "SVM0_5T1" = 0,
+                               "SVM6T1" = 6,
+                               "SVM6T1.1" = 6,
                                "SVM12T1" = 12,
                                "SVM12T1.1" = 12,
                                "SVM18T1" = 18,
+                               "SVM18T1.1" = 18,
                                "SVM24T1" = 24,
                                "SVM24T1.1" = 24,
+                               "SVM30T1" = 30,
+                               "SVM30T1.1" = 30,
                                "SVM36T1" = 36,
                                "SVM36T1.1" = 36,
-                               "SVM6T1" = 6,
-                               "SVM6T1.1" = 6,
+                               "SVM42T1" = 42,
+                               "SVM42T1.1" = 42,
 )
+
+# Fail loudly rather than silently carrying NA visit_month into the merge/model steps
+unmatched_time <- unique(selected_pathways$time[is.na(selected_pathways$visit_month)])
+if (length(unmatched_time) > 0) {
+  stop("Unmatched 'time' codes found in selected_pathways, these samples would get NA visit_month: ",
+       paste(unmatched_time, collapse = ", "))
+}
 
 #saveRDS(selected_pathways, "GSEA/selected_pathways_longformat.rds")
 
@@ -173,7 +188,7 @@ for (dependent_variable in dependent_variables) {
     formula <- as.formula(paste(dependent_variable, "~ ", variables_string, "+ (1|sex) + (1|participant_id) + (1|age_at_baseline) "))
   }
   # Create and fit the model
-  model <- glmer(formula, data = long_visit)
+  model <- lmer(formula, data = long_visit)
   
   # Print the model summary
   #print(summary(model))
@@ -233,7 +248,11 @@ for (i in 1:nrow(symm_score_muted)) {
 qgraph(symm_score, groups = merged_df$regulation,  layout=spring_layout, color=c("lightgreen", "lightblue", "orange","coral","#00BFFF", "pink","grey"),
        labels = colnames(symm_score)) 
 
-png("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results/GO_GSEA.png", width = 2400, height = 1800, res = 300)
+# ------------------------------------------------------------------------
+# GO_GSEA plot (muted, clinical-clinical edges removed) -- PNG, SVG, PDF
+# ------------------------------------------------------------------------
+
+png("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results_HB/GO_GSEA.png", width = 2400, height = 1800, res = 300)
 
 qgraph(
   symm_score_muted,
@@ -249,11 +268,47 @@ qgraph(
 )
 dev.off()
 
+svg("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results_HB/GO_GSEA.svg", width = 2400/300, height = 1800/300)
+
+qgraph(
+  symm_score_muted,
+  groups = merged_df$regulation,
+  layout = spring_layout,
+  color = c("lightgreen", "lightblue", "orange", "coral", "#00BFFF", "pink", "grey"),
+  labels = colnames(symm_score_muted),
+  label.cex = 0.3,
+  label.scale = FALSE,
+  label.scale.equal = TRUE,
+  vsize = 2,
+  posCol = "#B0E57C", negCol =  "#FF7F7F"
+)
+dev.off()
+
+pdf("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results_HB/GO_GSEA.pdf", width = 2400/300, height = 1800/300)
+
+qgraph(
+  symm_score_muted,
+  groups = merged_df$regulation,
+  layout = spring_layout,
+  color = c("lightgreen", "lightblue", "orange", "coral", "#00BFFF", "pink", "grey"),
+  labels = colnames(symm_score_muted),
+  label.cex = 0.3,
+  label.scale = FALSE,
+  label.scale.equal = TRUE,
+  vsize = 2,
+  posCol = "#B0E57C", negCol =  "#FF7F7F"
+)
+dev.off()
+
 symm_score_muted_tograph <- symm_score_muted
 
 symm_score_muted_tograph[abs(symm_score_muted_tograph)<1] <-0
 
-png("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results/GO_GSEA_clean.png", width = 2400, height = 1800, res = 300)
+# ------------------------------------------------------------------------
+# GO_GSEA_clean plot (muted + thresholded |t|>=1) -- PNG, SVG, PDF
+# ------------------------------------------------------------------------
+
+png("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results_HB/GO_GSEA_clean.png", width = 2400, height = 1800, res = 300)
 
 qgraph(
   symm_score_muted_tograph,
@@ -270,13 +325,47 @@ qgraph(
 
 dev.off()
 
+svg("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results_HB/GO_GSEA_clean.svg", width = 2400/300, height = 1800/300)
 
-setwd("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results/")
+qgraph(
+  symm_score_muted_tograph,
+  groups = merged_df$regulation,
+  layout = spring_layout,
+  color = c("lightgreen", "lightblue", "orange", "coral", "#00BFFF", "pink", "grey"),
+  labels = colnames(symm_score_muted_tograph),
+  label.cex = 0.3,
+  label.scale = FALSE,
+  label.scale.equal = TRUE,
+  vsize = 2,
+  posCol = "#B0E57C", negCol =  "#FF7F7F"
+)
+
+dev.off()
+
+pdf("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results_HB/GO_GSEA_clean.pdf", width = 2400/300, height = 1800/300)
+
+qgraph(
+  symm_score_muted_tograph,
+  groups = merged_df$regulation,
+  layout = spring_layout,
+  color = c("lightgreen", "lightblue", "orange", "coral", "#00BFFF", "pink", "grey"),
+  labels = colnames(symm_score_muted_tograph),
+  label.cex = 0.3,
+  label.scale = FALSE,
+  label.scale.equal = TRUE,
+  vsize = 2,
+  posCol = "#B0E57C", negCol =  "#FF7F7F"
+)
+
+dev.off()
+
+
+setwd("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results_HB/")
 
 # Write output
 score_df <- as.data.frame(symm_score_muted)
 score_df<- cbind(row_names = rownames(score_df), score_df)
-write_csv(score_df, "GO_clinical_score_matrix.csv")
+write.csv(score_df, "GO_clinical_score_matrix.csv")
 
 # # Paso 1: Calcular la suma de interacciones por nodo (suma por fila o columna, es igual porque es simétrico)
 # node_strength <- rowSums(abs(symm_score_muted[pathway_names,]))
@@ -325,10 +414,10 @@ write_csv(score_df, "GO_clinical_score_matrix.csv")
 #   posCol = "#B0E57C", negCol =  "#FF7F7F"# first color = negative edges, second = positive edges
 # )
 # 
-# 
+#
 # # Close the graphics device
 # dev.off()
 # 
 # score_output <- as.data.frame(submatrix)
 # score_output<- cbind(row_names = rownames(score_output), score_output)
-# write_csv(score_output, "pathways_clinical_top10.csv")
+# write.csv(score_output, "pathways_clinical_top10.csv")
