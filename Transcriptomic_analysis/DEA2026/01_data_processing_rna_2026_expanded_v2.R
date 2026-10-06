@@ -13,6 +13,8 @@ library(biomaRt)
 library(swamp)
 library(limma)
 library(ggplot2)
+library(pheatmap)
+
 
 setwd("~/Documents/Omics_Integration/Transcriptomic_analysis/DEA2026/")
 
@@ -237,19 +239,19 @@ confoundingDataFrame[rownames(confoundingDataFrame) %in% cases_list, "case_contr
 confoundingDataFrame[rownames(confoundingDataFrame) %in% controls_list, "case_control"] <- "control"
 confoundingDataFrame$case_control <- factor(confoundingDataFrame$case_control)
 
-combo_freq <- table(confoundingDataFrame$Plate, confoundingDataFrame$race)
+combo_freq <- table(confoundingDataFrame$Plate, confoundingDataFrame$ethnicity)
 rare_combos <- which(combo_freq == 1, arr.ind = TRUE)
 rare_df <- data.frame(
   plate = rownames(combo_freq)[rare_combos[, "row"]],
-  race = colnames(combo_freq)[rare_combos[, "col"]],
+  ethnicity = colnames(combo_freq)[rare_combos[, "col"]],
   stringsAsFactors = FALSE
 )
-rows_to_remove <- apply(confoundingDataFrame[, c("Plate", "race")], 1, function(x) {
-  any(x[1] == rare_df$plate & x[2] == rare_df$race)
+rows_to_remove <- apply(confoundingDataFrame[, c("Plate", "ethnicity")], 1, function(x) {
+  any(x[1] == rare_df$plate & x[2] == rare_df$ethnicity)
 })
-#confoundingDataFrame2 <- confoundingDataFrame[!rows_to_remove, ]
+confoundingDataFrame2 <- confoundingDataFrame[!rows_to_remove, ]
 
-confoundingDataFrame2 <- confoundingDataFrame
+confoundingDataFrame2 <- droplevels(confoundingDataFrame2)
 confoundingDataFrame2$time <- sub("^.*?-.*?-", "", rownames(confoundingDataFrame2))
 confoundingDataFrame2$visit_month <- recode(confoundingDataFrame2$time,
                                             "BLM0T1" = 0, "BLM0T1.1" = 0, "SVM0_5T1" = 0,
@@ -310,6 +312,27 @@ diag_meta[] <- lapply(diag_meta, function(x) if (is.character(x)) factor(x) else
 ## 7a. swamp::prince() BEFORE correction -- heatmap of variance explained
 ##     per principal component by each covariate
 # --------------------------------------------------------------------------
+
+meta_aligned <- diag_meta[colnames(logCPM), ]
+num_vars <- names(meta_aligned)[sapply(meta_aligned, is.numeric)]
+num_vars <- num_vars[apply(meta_aligned[, num_vars, drop = FALSE], 2, sd, na.rm = TRUE) > 0]  # sin varianza = NA en cor()
+
+cov_cor <- cor(meta_aligned[, num_vars], use = "pairwise.complete.obs", method = "spearman")
+# Heatmap
+png("results/Bias_correction/covariates_correlation.png", width = 960, height = 960)
+pheatmap(cov_cor, display_numbers = TRUE, number_format = "%.2f",
+         breaks = seq(-1, 1, length.out = 101),
+         color = colorRampPalette(c("steelblue", "white", "firebrick"))(100))
+dev.off()
+
+cov_max <- do.call(rbind, lapply(rownames(cov_cor), function(v) {
+  r <- cov_cor[v, colnames(cov_cor) != v]
+  i <- which.max(abs(r))
+  data.frame(variable = v, top_partner = names(r)[i], rho = round(r[i], 3))
+}))
+cov_max <- cov_max[order(-abs(cov_max$rho)), ]
+rownames(cov_max) <- NULL
+cov_max
 
 resConf_before <- prince(logCPM, diag_meta, top = 10)
 saveRDS(resConf_before, "results/Bias_correction/resConf_before.rds")
