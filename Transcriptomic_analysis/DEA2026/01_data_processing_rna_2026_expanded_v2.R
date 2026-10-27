@@ -239,15 +239,15 @@ confoundingDataFrame[rownames(confoundingDataFrame) %in% cases_list, "case_contr
 confoundingDataFrame[rownames(confoundingDataFrame) %in% controls_list, "case_control"] <- "control"
 confoundingDataFrame$case_control <- factor(confoundingDataFrame$case_control)
 
-combo_freq <- table(confoundingDataFrame$Plate, confoundingDataFrame$ethnicity)
+combo_freq <- table(confoundingDataFrame$Plate, confoundingDataFrame$race)
 rare_combos <- which(combo_freq == 1, arr.ind = TRUE)
 rare_df <- data.frame(
   plate = rownames(combo_freq)[rare_combos[, "row"]],
-  ethnicity = colnames(combo_freq)[rare_combos[, "col"]],
+  race = colnames(combo_freq)[rare_combos[, "col"]],
   stringsAsFactors = FALSE
 )
-rows_to_remove <- apply(confoundingDataFrame[, c("Plate", "ethnicity")], 1, function(x) {
-  any(x[1] == rare_df$plate & x[2] == rare_df$ethnicity)
+rows_to_remove <- apply(confoundingDataFrame[, c("Plate", "race")], 1, function(x) {
+  any(x[1] == rare_df$plate & x[2] == rare_df$race)
 })
 confoundingDataFrame2 <- confoundingDataFrame[!rows_to_remove, ]
 
@@ -277,8 +277,8 @@ rawCounts_filtered <- rawCounts_filtered[, common]
 confoundingDataFrame2 <- confoundingDataFrame2[common, ]
 stopifnot(all(colnames(rawCounts_filtered) == rownames(confoundingDataFrame2)))
 
-design_vars <- c("Neutrophils", "RIN_Value", "Plate", "age_at_baseline",
-                 "sex", "race", "case_control", "Submitted_Volume__ul_")
+design_vars <- c("case_control", "visit_month", "sex", "race", "age_at_baseline",
+                 "Neutrophils", "Plate", "RIN_Value", "Normalization_Volume__30ng_ul_")
 na_check <- sapply(confoundingDataFrame2[, design_vars], function(x) sum(is.na(x)))
 print(na_check)
 stopifnot(sum(na_check) == 0)
@@ -336,6 +336,21 @@ cov_max
 
 resConf_before <- prince(logCPM, diag_meta, top = 10)
 saveRDS(resConf_before, "results/Bias_correction/resConf_before.rds")
+write.csv(cov_max, "results/Bias_correction/covariates_correlation_top_partner.csv", row.names = FALSE)
+write.csv(round(cov_cor, 3), "results/Bias_correction/covariates_correlation_matrix.csv")
+
+vars_sel <- c("Submitted_Volume__ul_", "Concentration", "Normalization_Volume__30ng_ul_",
+              "Specimen_Quantity", "Input_RNASeq__ng_", "Input_miRNA__ng_")
+
+fdr_before <- apply(resConf_before$linp, 2, p.adjust, method = "fdr")
+prop_frac  <- resConf_before$prop[1:ncol(resConf_before$linp)] / 100
+sel_tab <- do.call(rbind, lapply(vars_sel, function(v) data.frame(
+  variable    = v,
+  min_FDR     = signif(min(fdr_before[v, ]), 3),
+  sig_PCs     = paste0("PC", which(fdr_before[v, ] < 0.05), collapse = ","),
+  weighted_R2 = round(sum(resConf_before$rsquared[v, ] * prop_frac), 4))))
+sel_tab <- sel_tab[order(-sel_tab$weighted_R2), ]
+write.csv(sel_tab, "results/Bias_correction/covariate_selection_swamp.csv", row.names = FALSE)
 #resConf_before <- readRDS("results/Bias_correction/resConf_before.rds")
 
 png("results/Bias_correction/swamp_before_correction.png", width = 960, height = 960)
@@ -400,9 +415,7 @@ for (v in names(pc_pairs_before)) {
 ## 7c. Batch correction with removeBatchEffect (diagnostic version only)
 # --------------------------------------------------------------------------
 
-selectedVars <- c("visit_month", "sex", "age_at_baseline", "race",
-                   "Neutrophils", "Plate", "RIN_Value", "Submitted_Volume__ul_")
-selectedVars <- selectedVars[selectedVars %in% colnames(diag_meta)]
+selectedVars <- setdiff(design_vars, "case_control")
 
 na_check_diag <- sapply(diag_meta[, selectedVars], function(x) sum(is.na(x)))
 stopifnot(sum(na_check_diag) == 0)
@@ -410,14 +423,22 @@ stopifnot(sum(na_check_diag) == 0)
 matrix2Correct <- diag_meta[, selectedVars]
 designCovariates <- model.matrix(~., data = matrix2Correct)[, -1]
 
-normExpr_diag <- removeBatchEffect(logCPM, covariates = designCovariates)
-
+normExpr_diag <- removeBatchEffect(logCPM, covariates = designCovariates,
+                                   design = model.matrix(~ case_control, data = diag_meta))
 # --------------------------------------------------------------------------
 ## 7d. swamp::prince() AFTER correction
 # --------------------------------------------------------------------------
 
 resConf_after <- prince(as.matrix(normExpr_diag), diag_meta[colnames(normExpr_diag), ], top = 10)
 saveRDS(resConf_after, "results/Bias_correction/resConf_after.rds")
+fdr_after  <- apply(resConf_after$linp, 2, p.adjust, method = "fdr")
+prop_after <- resConf_after$prop[1:ncol(resConf_after$linp)] / 100
+resid_tab <- do.call(rbind, lapply(vars_sel, function(v) data.frame(
+  variable    = v,
+  weighted_R2 = round(sum(resConf_after$rsquared[v, ] * prop_after), 4),
+  n_sig_PCs   = sum(fdr_after[v, ] < 0.05))))
+write.csv(resid_tab, "results/Bias_correction/covariate_residual_after.csv", row.names = FALSE)
+
 #resConf_after <- readRDS("results/Bias_correction/resConf_after.rds")
 
 png("results/Bias_correction/swamp_after_correction.png", width = 960, height = 960)
@@ -466,8 +487,8 @@ for (v in names(pc_pairs_after)) {
 
 cat("Diagnostic swamp/PCA plots saved to results/Bias_correction/\n")
 
-resConf_after <- readRDS("~/Documents/Omics_Integration/Transcriptomic_analysis/DEA2026/results/Bias_correction/resConf_after.rds")
-resConf_before <- readRDS("~/Documents/Omics_Integration/Transcriptomic_analysis/DEA2026/results/Bias_correction/resConf_before.rds")
+#resConf_after <- readRDS("~/Documents/Omics_Integration/Transcriptomic_analysis/DEA2026/results/Bias_correction/resConf_after.rds")
+#resConf_before <- readRDS("~/Documents/Omics_Integration/Transcriptomic_analysis/DEA2026/results/Bias_correction/resConf_before.rds")
 
 pc_labels <- function(res) {
   k <- ncol(res$linp)

@@ -17,6 +17,7 @@ library(MariNET)
 source("~/Documents/Parkinson/clinical_metadata_v4_2023/DataReading_v4.R")
 source("~/Documents/Parkinson/shifted_matrix.R")
 source("~/Documents/Parkinson/data_processing.R")
+source("~/Documents/Omics_Integration/Proteomic_analysis/fixed_layout.R")
 
 #1. Collect and filter data 
 data_normalized <- as.data.frame(readRDS("~/Documents/Omics_Integration/Transcriptomic_analysis/DEA2026/results/Results_rnaseq/normalized_expression_genesymbol.rds"))
@@ -176,7 +177,6 @@ for (depentent_variable in dependent_variables) {
 score<- do.call(rbind, models)
 colnames(score)[1] <- variables_to_scale[1]
 
-source("shifted_matrix.R")
 # Change format of score matrix using external functions 
 score_matrix <- score_matrix(score, shift_matrix(score))
 
@@ -215,7 +215,7 @@ qgraph(symm_score, groups = structure$community_structure,  layout="spring", col
 qgraph(symm_score_muted, groups = structure$community_structure, layout=spring_layout, color=c("lightgreen", "lightblue", "#00BFFF","orange", "pink","grey"),
        labels = colnames(symm_score_muted)) 
 
-dev.off()
+#dev.off()
 
 
 setwd("~/Documents/Omics_Integration/Transcriptomic_analysis/DEA2026/results/Results_integration/")
@@ -223,10 +223,10 @@ setwd("~/Documents/Omics_Integration/Transcriptomic_analysis/DEA2026/results/Res
 # Write output
 score_df <- as.data.frame(symm_score_muted)
 score_df<- cbind(row_names = rownames(score_df), score_df)
-write_csv(score_df, "transcriptomic_clinical_score_matrix.csv")
+write.csv(score_df, "transcriptomic_clinical_score_matrix.csv")
 
 # Paso 1: Calcular la suma de interacciones por nodo (suma por fila o columna, es igual porque es simétrico)
-node_strength <- rowSums(abs(symm_score_muted[selected_genes,]))
+node_strength <- apply(abs(symm_score_muted[selected_genes, ]), 1, max)
 
 # Paso 2: Convertirlo a dataframe
 strength_df <- data.frame(
@@ -249,33 +249,41 @@ selected_vars <- c("UPDRS1", "UPDRS2", "UPDRS3", "UPDRS4", "MOCA", "Mobility39",
 submatrix <- symm_score_muted[selected_vars, selected_vars]
 structure <- subset(structure, structure$node_names %in% selected_vars)
 
+el        <- make_edge_labels(submatrix, threshold = 2)
+ec_labels <- make_edge_colors(el)
+ec_lines  <- make_edge_colors_gradient(submatrix, exponent = 1.6)
 
-# Open a PNG graphics device
-png("transcriptomics_clinical_top10.png", width = 1800, height = 1200, res = 500)
+fig_w <- 10     # inches
+fig_h <- 7.5    # inches
 
-# Generate the qgraph plot
-#qgraph(submatrix,  vsize = 4,  groups = structure$community_structure,  layout=layout_fixed, color=c("lightgreen", "lightblue","#00BFFF","orange","pink","grey"), legend.cex = 0.2, labels = colnames(submatrix)) 
-el <- make_edge_labels(submatrix, threshold = 2)
-ec_labels <- make_edge_colors(el)                     # for label text (unchanged)
-ec_lines  <- make_edge_colors_gradient(submatrix, exponent = 1.6)      # for edge lines (independent
+plot_net <- function(mat, layout, groups = structure$community_structure) {
+  qgraph(mat,
+         vsize = 4,
+         groups = groups,
+         layout = layout,
+         color = c("lightgreen", "lightblue", "#00BFFF", "orange", "pink", "grey"),
+         legend.cex = 0.45,
+         labels = colnames(mat),
+         edge.labels = el,
+         edge.label.cex = 0.7,
+         edge.label.font = 2,
+         edge.label.color = ec_labels,
+         edge.color = ec_lines,
+         fade = FALSE,
+         label.cex = 1.2)
+}
 
-qgraph(submatrix, 
-       vsize = 4,  
-       groups = structure$community_structure,  
-       layout = layout_fixed, 
-       color = c("lightgreen", "lightblue", "#00BFFF","orange","pink","grey"), 
-       legend.cex = 0.2,
-       labels = colnames(submatrix),
-       edge.labels = el,
-       edge.label.cex = 0.5,
-       edge.label.font = 2,
-       edge.label.color = ec_labels,
-       edge.color = ec_lines,     # <- custom gradient, bypasses cut entirely
-       fade = FALSE,              # <- turn off qgraph's own fade, since we're supplying colors directly
-       label.cex = 1.2)
+lay <- network_layout(submatrix)
 
-dev.off()
+png("transcriptomics_clinical_top10.png", width = fig_w, height = fig_h, units = "in", res = 300)
+plot_net(submatrix, lay); dev.off()
+
+svg("transcriptomics_clinical_top10.svg", width = fig_w, height = fig_h)
+plot_net(submatrix, lay); dev.off()
+
+pdf("transcriptomics_clinical_top10.pdf", width = fig_w, height = fig_h)
+plot_net(submatrix, lay); dev.off()
 
 score_output <- as.data.frame(submatrix)
 score_output<- cbind(row_names = rownames(score_output), score_output)
-write_csv(score_output, "transcriptomics_clinical_top10.csv")
+write.csv(score_output, "transcriptomics_clinical_top10.csv")

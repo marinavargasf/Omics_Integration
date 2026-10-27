@@ -1,6 +1,6 @@
 #########################################################################################################
 # Normalized (batch-corrected) expression matrix + metadata, aligned to the same
-# samples/genes used in 02_rnaseq_2026.R's DESeq2 run. For MariNET network input.
+# samples/genes used in 02_deseq2_2026.R's DESeq2 run. For MariNET network input.
 #########################################################################################################
 setwd("~/Documents/Omics_Integration/Transcriptomic_analysis/DEA2026/results")
 start_time <- Sys.time()
@@ -11,23 +11,22 @@ library("DESeq2")
 library("dplyr")
 library("edgeR")
 
-#dir.create("Results_rnaseq", recursive = TRUE, showWarnings = FALSE)
-
 ################################################################################
 ################################## Read data ##################################
 ################################################################################
 
-# Same inputs as 02_rnaseq_2026.R -- already gene-filtered, QC'd, rare-combo
+# Same inputs as 02_deseq2_2026.R -- already gene-filtered, QC'd, rare-combo
 # filtered, droplevels()'d. Do NOT redo any of that here.
-countData <- readRDS(file = "./data/rawCounts_filtered.rds")
-metadata  <- readRDS(file = "./data/confoundingDataFrame2_full.rds")
+# NOTE: working dir is results/, so data/ is one level up.
+countData <- readRDS(file = "../data/rawCounts_filtered.rds")
+metadata  <- droplevels(readRDS(file = "../data/confoundingDataFrame2_full.rds"))
 
 common_samples <- intersect(colnames(countData), rownames(metadata))
 stopifnot(length(common_samples) > 0)
 countData <- countData[, common_samples, drop = FALSE]
 metadata  <- metadata[common_samples, , drop = FALSE]
-countData <- countData[, rownames(metadata)]
-stopifnot(all(rownames(metadata) == colnames(countData)))
+stopifnot(identical(rownames(metadata), colnames(countData)),
+          ncol(countData) == 5731)                 # same N as the DESeq2 run
 cat("Samples aligned:", ncol(countData), "\n")
 
 ################################################################################
@@ -42,34 +41,31 @@ logCPM <- cpm(dge, log = TRUE, prior.count = 1)
 ######################## Batch correction (nuisance vars only) ################
 ################################################################################
 
-# Must match the final covariate set used in the DESeq2 design (02_rnaseq_2026.R),
-# minus case_control and visit_month -- those are biological signal, not
-# nuisance, and must not be regressed out here.
-selectedVars <- c("Neutrophils", "RIN_Value", "Plate", "sex", "age_at_baseline", "ethnicity",
-                 "Submitted_Volume__ul_")  # CONFIRM: matches DESeq design_terms exactly
-
-selectedVars <- selectedVars[selectedVars %in% colnames(metadata)]
+# Same covariates as the DESeq2 design (02_deseq2_2026.R) minus case_control and
+# visit_month: those are biological signal for MariNET and are PRESERVED via `design`.
+selectedVars <- c("Neutrophils", "RIN_Value", "Plate", "sex", "age_at_baseline", "race",
+                  "Normalization_Volume__30ng_ul_")
+stopifnot(all(selectedVars %in% colnames(metadata)))   # fail loudly instead of silently dropping
 cat("Batch-correction covariates used:", paste(selectedVars, collapse = ", "), "\n")
 
-na_check <- sapply(metadata[, selectedVars], function(x) sum(is.na(x)))
+na_check <- sapply(metadata[, c(selectedVars, "case_control", "visit_month")], function(x) sum(is.na(x)))
 print(na_check)
 stopifnot(sum(na_check) == 0)
 
 matrix2Correct <- droplevels(metadata[, selectedVars])
 designCovariates <- model.matrix(~., data = matrix2Correct)[, -1]
-
-cat("Is batch-correction design fullrank?\n")
-print(is.fullrank(model.matrix(~., data = matrix2Correct)))
 stopifnot(is.fullrank(model.matrix(~., data = matrix2Correct)))
 
-normExpr <- removeBatchEffect(logCPM, covariates = designCovariates)
+design2preserve <- model.matrix(~ case_control + visit_month, data = metadata)
+
+normExpr <- removeBatchEffect(logCPM, covariates = designCovariates, design = design2preserve)
 
 ################################################################################
 ##################### Annotate with gene symbols (cached mapping) ############
 ################################################################################
 
-gene_map_path <- "./data/gene_map_v100_full.rds"
-stopifnot(file.exists(gene_map_path))  # built earlier in the DE-results translation step -- reuse it
+gene_map_path <- "../data/gene_map_v100_full.rds"
+stopifnot(file.exists(gene_map_path))  # built in 03_annotate_deseq2_2026.R -- reuse it
 gene_mapping <- readRDS(gene_map_path)
 cat("Loaded cached gene mapping (", nrow(gene_mapping), "rows)\n")
 
@@ -92,6 +88,7 @@ normExpr_genesymbol <- as.matrix(data_ordered[, setdiff(colnames(normExpr_df), c
 ################################## Save outputs ###############################
 ################################################################################
 
+dir.create("Results_rnaseq", recursive = TRUE, showWarnings = FALSE)
 saveRDS(metadata, file = "Results_rnaseq/normalized_metadata.rds")
 saveRDS(normExpr, file = "Results_rnaseq/normalized_expression.rds")
 saveRDS(normExpr_genesymbol, file = "Results_rnaseq/normalized_expression_genesymbol.rds")
@@ -99,6 +96,10 @@ saveRDS(normExpr_genesymbol, file = "Results_rnaseq/normalized_expression_genesy
 cat("Gene symbol translation done. Genes:", nrow(normExpr_genesymbol),
     "(from", nrow(normExpr), "Ensembl IDs;", sum(missing_symbol), "had no HGNC symbol;",
     "duplicate symbols collapsed to highest-mean-expression row)\n")
+
+# Sanity check: the 13 DEGs must be present in the normalized matrix
+degs <- readRDS("Results_rnaseq/dif_exp_genesymbol_sig.rds")
+stopifnot(all(rownames(degs) %in% rownames(normExpr_genesymbol)))
 
 end_time <- Sys.time()
 cat("Time taken for analysis: ", format(end_time - start_time), "\n")

@@ -3,6 +3,7 @@
 
 #Load required libraries,
 library(fgsea)
+library(data.table)
 library(msigdbr)
 library(dplyr)
 library(tibble)
@@ -11,6 +12,8 @@ library(pathMED)
 library(ggplot2)
 
 setwd("~/Documents/Omics_Integration/Transcriptomic_analysis")
+dir.create("./FGSEA2026/Results", recursive = TRUE, showWarnings = FALSE)
+
 #Load differential expression results,
 
 expressionData <- as.data.frame(readRDS("./DEA2026/results/Results_rnaseq/normalized_expression_genesymbol.rds"))
@@ -50,20 +53,53 @@ fgseaResTidy <- fgseaRes %>%
   as_tibble()
 
 #Process and save results,
-fgseaResTidy_traslated <- fgseaResTidy%>%
-  left_join(traslation, by = c("pathway" = "ID"))  # Ajusta "pathway" al nombre correcto
+fgseaResTidy_traslated <- fgseaResTidy %>%
+  left_join(traslation, by = c("pathway" = "ID"))
 
 fgseaResTidy_traslated %>% filter(term == "negative regulation of apoptotic process")
-#Filter top adj pval
+
+#Filter top adj pval (predefined threshold)
 fgseaResFiltered <- fgseaResTidy_traslated %>%
-  filter(padj <= 0.1 & abs(NES) >=1.5) %>%
+  filter(padj <= 0.05 & abs(NES) >= 1.5) %>%
   as_tibble()
 
-data_table <- as.data.frame(fgseaResFiltered)
-#Save results to file,
-write_csv(data_table, "./FGSEA2026/Results/fgsea_hallmark_results_filtered_GO.csv")
-saveRDS(data_table, "./FGSEA2026/Results/fgsea_hallmark_results_filtered_GO.rds")
+################################################################################
+## Collapse redundant pathways (fgsea::collapsePathways)
+## Works on the fgsea results + ranking, NOT on GSVA scores.
+################################################################################
 
+sig_dt <- fgseaRes[padj <= 0.1 & abs(NES) >= 1.5]
+set.seed(42)
+collapsed <- collapsePathways(sig_dt[order(pval)], pathways_genesets, ranks)
+main_ids <- collapsed$mainPathways
+
+fgseaResFiltered_collapse <- fgseaResFiltered %>%
+  filter(pathway %in% main_ids)
+
+cat("Significant pathways:", nrow(fgseaResFiltered),
+    "| after collapsing redundancy:", nrow(fgseaResFiltered_collapse), "\n")
+
+# Which main pathway absorbs each redundant one (useful for the supplementary table)
+collapse_map <- tibble(pathway = names(collapsed$parentPathways),
+                       parent  = unname(collapsed$parentPathways)) %>%
+  left_join(traslation, by = c("pathway" = "ID")) %>%
+  left_join(traslation %>% dplyr::rename(parent_term = term), by = c("parent" = "ID"))
+write_csv(collapse_map, "./FGSEA2026/Results/fgsea_GO_collapse_parent_map.csv")
+
+################################################################################
+## Save tables (leadingEdge is a list column -> flatten for CSV)
+################################################################################
+
+save_table <- function(df, suffix = "") {
+  df <- as.data.frame(df)
+  csv_df <- df
+  csv_df$leadingEdge <- sapply(csv_df$leadingEdge, paste, collapse = ";")
+  write_csv(csv_df, paste0("./FGSEA2026/Results/fgsea_hallmark_results_filtered_GO", suffix, ".csv"))
+  saveRDS(df, paste0("./FGSEA2026/Results/fgsea_hallmark_results_filtered_GO", suffix, ".rds"))
+}
+
+save_table(fgseaResFiltered)
+save_table(fgseaResFiltered_collapse, "_collapse")
 
 #Optional: plot top pathways,
 topPathways <- fgseaResTidy %>%
@@ -100,87 +136,77 @@ pdf("./FGSEA2026/Results/fgsea_GO_top_pathways.pdf", width = 1190/96, height = 9
 print(p_top_pathways)
 dev.off()
 
-# plotEnrichment(pathway = pathways_genesets[["hsa05012"]],
-#                stats = ranks,
-#                gseaParam = 1,
-#                ticksSize = 0.2)
-# 
-# plotEnrichment(pathway = msigdbr_list[["SA_PROGRAMMED_CELL_DEATH"]],
-#                stats = ranks,
-#                gseaParam = 1,
-#                ticksSize = 0.2)
-
 ################################################################################
+## GSVA scores
+## Scores are computed once for all significant pathways; each gene set's score
+## does not depend on the other sets, so the collapsed version is just a subset.
 ################################################################################
 
 pathways_sig <- pathways_genesets[names(pathways_genesets) %in% fgseaResFiltered$pathway]
 scores <- getScores(expressionData, geneSets = pathways_sig, method = "GSVA", cores = 10)
-filtered_scores <- scores[rownames(scores) %in% fgseaResFiltered$pathway, ]
-
-
-filtered_scores <- as.data.frame(filtered_scores)
-
-filtered_scores <- filtered_scores %>%
-  rownames_to_column(var = "ID") %>%
-  left_join(traslation, by = "ID")  # Usa la columna ID como clave
-
-
-
 saveRDS(scores, "./FGSEA2026/Results/pathwayScores_samples.rds")
-saveRDS(filtered_scores, "./FGSEA2026/Results/pathwayScores_samplesFiltered_GO.rds")
 
-NES <- fgseaResFiltered %>% dplyr::select(pathway,NES)
-saveRDS(NES, "./FGSEA2026/Results/nes_GO.RDS")
+save_scores <- function(res_table, suffix = "") {
+  fs <- scores[rownames(scores) %in% res_table$pathway, , drop = FALSE]
+  fs <- as.data.frame(fs) %>%
+    rownames_to_column(var = "ID") %>%
+    left_join(traslation, by = "ID")
+  saveRDS(fs, paste0("./FGSEA2026/Results/pathwayScores_samplesFiltered_GO", suffix, ".rds"))
 
+  nes <- res_table %>% dplyr::select(pathway, NES)
+  saveRDS(nes, paste0("./FGSEA2026/Results/nes_GO", suffix, ".RDS"))
+}
 
+save_scores(fgseaResFiltered)
+save_scores(fgseaResFiltered_collapse, "_collapse")
 
-# Prepare data
-bubble_df <- fgseaResFiltered %>%
-  mutate(
-    padj = ifelse(padj == 0, 1e-300, padj),  # fix zero-padj BEFORE computing logFDR
-    logFDR = -log10(padj)
-  ) %>%
-  arrange(padj)
+################################################################################
+## Bubble plots -- normal and collapsed, each saved to PNG, SVG, and PDF
+################################################################################
 
-# Optional: limit number of pathways (VERY recommended)
-#bubble_df <- bubble_df %>% head(25)
-nrow(fgseaResFiltered)
-# ------------------------------------------------------------------------
-# Bubble plot -- build once, save to PNG, SVG, and PDF
-# ------------------------------------------------------------------------
+make_bubble <- function(res_table, suffix = "", title = "FGSEA GO Enrichment") {
+  bubble_df <- res_table %>%
+    mutate(
+      padj = ifelse(padj == 0, 1e-300, padj),  # fix zero-padj BEFORE computing logFDR
+      logFDR = -log10(padj)
+    ) %>%
+    arrange(padj)
 
-p_bubble <- ggplot(bubble_df, aes(x = logFDR, y = reorder(term, logFDR))) +
-  geom_point(aes(size = size, color = NES), alpha = 0.8) +
-  scale_color_gradient2(
-    low = "#2166AC", 
-    mid = "white", 
-    high = "#B2182B", 
-    midpoint = 0
-  ) +
-  scale_size(range = c(2, 6)) +  # slightly smaller bubbles
-  labs(
-    x = "-log10(FDR)",
-    y = "Pathway",
-    color = "NES",
-    size = "Gene set size",
-    title = "FGSEA GO Enrichment"
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.y = element_text(size = 8),
-    axis.text.x = element_text(size = 8),
-    plot.title = element_text(hjust = 0.5, size = 12)
-  )
+  p <- ggplot(bubble_df, aes(x = logFDR, y = reorder(term, logFDR))) +
+    geom_point(aes(size = size, color = NES), alpha = 0.8) +
+    scale_color_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0) +
+    scale_size(range = c(2, 6)) +
+    labs(
+      x = "-log10(FDR)",
+      y = "Pathway",
+      color = "NES",
+      size = "Gene set size",
+      title = title
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.y = element_text(size = 8),
+      axis.text.x = element_text(size = 8),
+      plot.title = element_text(hjust = 0.5, size = 12)
+    )
 
-# Higher-resolution PNG with bigger dimensions
-png("./FGSEA2026/Results/fgsea_GO_bubble.png", width = 1200, height = 900, res = 150)
-print(p_bubble)
-dev.off()
+  base <- paste0("./FGSEA2026/Results/fgsea_GO_bubble", suffix)
 
-svg("./FGSEA2026/Results/fgsea_GO_bubble.svg", width = 1200/150, height = 900/150)
-print(p_bubble)
-dev.off()
+  png(paste0(base, ".png"), width = 1200, height = 900, res = 150)
+  print(p)
+  dev.off()
 
-pdf("./FGSEA2026/Results/fgsea_GO_bubble.pdf", width = 1200/150, height = 900/150)
-print(p_bubble)
-dev.off()
+  svg(paste0(base, ".svg"), width = 1200/150, height = 900/150)
+  print(p)
+  dev.off()
+
+  pdf(paste0(base, ".pdf"), width = 1200/150, height = 900/150)
+  print(p)
+  dev.off()
+
+  invisible(p)
+}
+
+make_bubble(fgseaResFiltered)
+make_bubble(fgseaResFiltered_collapse, "_collapse",
+            title = "FGSEA GO Enrichment (non-redundant pathways)")

@@ -17,14 +17,14 @@ source("~/Documents/Parkinson/clinical_metadata_v4_2023/DataReading_v4.R")
 source("~/Documents/Parkinson/shifted_matrix.R")
 source("~/Documents/Parkinson/data_processing.R")
 
-setwd("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results_HB/") #or results!
+setwd("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results/") #or results!
 
 #1. Collect and filter data 
-scores <- readRDS("pathwayScores_samplesFiltered_GO.rds")
+scores <- readRDS("pathwayScores_samplesFiltered_GO_collapse.rds")
 rownames(scores) <- scores$term
 scores <- scores[, !(colnames(scores) %in% c("ID", "term"))]
 
-NES <- readRDS("nes_GO.RDS")
+NES <- readRDS("nes_GO_collapse.RDS")
 
 # traslation was previously relied upon as a loaded workspace object 
 traslation <- readRDS("pathway_id_term_translation.rds")
@@ -252,7 +252,7 @@ qgraph(symm_score, groups = merged_df$regulation,  layout=spring_layout, color=c
 # GO_GSEA plot (muted, clinical-clinical edges removed) -- PNG, SVG, PDF
 # ------------------------------------------------------------------------
 
-png("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results_HB/GO_GSEA.png", width = 2400, height = 1800, res = 300)
+png("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results/GO_GSEA.png", width = 2400, height = 1800, res = 300)
 
 qgraph(
   symm_score_muted,
@@ -268,7 +268,7 @@ qgraph(
 )
 dev.off()
 
-svg("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results_HB/GO_GSEA.svg", width = 2400/300, height = 1800/300)
+svg("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results/GO_GSEA.svg", width = 2400/300, height = 1800/300)
 
 qgraph(
   symm_score_muted,
@@ -284,7 +284,7 @@ qgraph(
 )
 dev.off()
 
-pdf("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results_HB/GO_GSEA.pdf", width = 2400/300, height = 1800/300)
+pdf("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results/GO_GSEA.pdf", width = 2400/300, height = 1800/300)
 
 qgraph(
   symm_score_muted,
@@ -302,13 +302,13 @@ dev.off()
 
 symm_score_muted_tograph <- symm_score_muted
 
-symm_score_muted_tograph[abs(symm_score_muted_tograph)<1] <-0
+symm_score_muted_tograph[abs(symm_score_muted_tograph)<0.8] <-0
 
 # ------------------------------------------------------------------------
 # GO_GSEA_clean plot (muted + thresholded |t|>=1) -- PNG, SVG, PDF
 # ------------------------------------------------------------------------
 
-png("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results_HB/GO_GSEA_clean.png", width = 2400, height = 1800, res = 300)
+png("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results/GO_GSEA_clean.png", width = 2400, height = 1800, res = 300)
 
 qgraph(
   symm_score_muted_tograph,
@@ -325,7 +325,7 @@ qgraph(
 
 dev.off()
 
-svg("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results_HB/GO_GSEA_clean.svg", width = 2400/300, height = 1800/300)
+svg("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results/GO_GSEA_clean.svg", width = 2400/300, height = 1800/300)
 
 qgraph(
   symm_score_muted_tograph,
@@ -342,7 +342,7 @@ qgraph(
 
 dev.off()
 
-pdf("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results_HB/GO_GSEA_clean.pdf", width = 2400/300, height = 1800/300)
+pdf("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results/GO_GSEA_clean.pdf", width = 2400/300, height = 1800/300)
 
 qgraph(
   symm_score_muted_tograph,
@@ -360,7 +360,7 @@ qgraph(
 dev.off()
 
 
-setwd("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results_HB/")
+setwd("~/Documents/Omics_Integration/Transcriptomic_analysis/FGSEA2026/Results/")
 
 # Write output
 score_df <- as.data.frame(symm_score_muted)

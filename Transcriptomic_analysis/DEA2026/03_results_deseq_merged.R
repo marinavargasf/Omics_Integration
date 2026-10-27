@@ -5,32 +5,20 @@ library(readr)
 setwd("~/Documents/Omics_Integration/Transcriptomic_analysis/DEA2026/results")
 
 ################################################################################
-## 1. Load DESeq2 object and extract results
+## 1. Load DESeq2 results (new model, 2026)
 ################################################################################
 
-load(file = "./Results_rnaseq/deseq2_output.RData")
-print(resultsNames(dds))
-levels(metadata$case_control)
-res <- as.data.frame(results(dds, name = "case_controlcontrol"))
-
-# Coefficient is control-vs-case (case is reference level). Flipping sign here
-# to match the historical convention: positive log2FC = higher in cases.
-# CONFIRM this is still the direction you want before trusting downstream signs.
-res$log2FoldChange <- (-1) * res$log2FoldChange
-res$stat <- (-1) * res$stat
+res <- readRDS("./Results_rnaseq/res_deseq_2026.rds")
+# Coefficient case_controlcase (control = reference): positive log2FC = higher in cases.
+# NO sign flip needed (the old deseq2_output.RData used case as reference -- do not load it).
 
 res <- res[order(res$padj), ]
-sig <- subset(res, padj <= 0.05)
-
-sig2 <- subset(sig, abs(log2FoldChange)>=0.15)
-
-# dir.create("../../Results_2026", recursive = TRUE, showWarnings = FALSE)
-# saveRDS(res, file = "../../Results_2026/res_deseq_full.rds")
-# saveRDS(sig, file = "../../Results_2026/res_deseq_sig.rds")
-cat("Significant genes (padj < 0.05), abs(log2FoldChange)>0.15 :", nrow(sig2), "\n")
+sig2 <- subset(res, padj < 0.05 & abs(log2FoldChange) > 0.15)
+cat("Significant genes (padj < 0.05, |log2FC| > 0.15):", nrow(sig2), "\n")
+stopifnot(nrow(sig2) == 13)   # must match the 02_deseq2_2026.R output
 
 ################################################################################
-## 2. Annotate with gene symbols (HGNC), pinned Ensembl v100
+## 2. Annotate with gene symbols (HGNC)
 ################################################################################
 ensembl_ids <- rownames(res)
 
@@ -73,8 +61,10 @@ data_ordered <- data_ordered[, !(names(data_ordered) %in% c("gene_name"))]
 
 data_complete <- data_ordered
 
-# significance filter: padj + effect size threshold (confirm 0.15 is still correct)
-data_filtered <- data_complete[abs(data_complete$log2FoldChange) >= 0.15 & data_complete$padj <= 0.05, ]
+# significance filter: same thresholds as 02_deseq2_2026.R
+data_filtered <- data_complete[!is.na(data_complete$padj) &
+                               data_complete$padj < 0.05 &
+                               abs(data_complete$log2FoldChange) > 0.15, ]
 data_sorted <- data_filtered[order(data_filtered$abslogFC, decreasing = TRUE), ]
 
 saveRDS(data_complete, file = "./Results_rnaseq/dif_exp_genesymbol_complete.rds")
@@ -84,4 +74,7 @@ write.csv(data_complete, "./Results_rnaseq/dif_exp_genesymbol_complete.csv")
 write.csv(data_sorted, "./Results_rnaseq/dif_exp_genesymbol_sig.csv")
 
 cat("Annotated complete results:", nrow(data_complete), "genes\n")
-cat("Annotated + filtered (padj<0.05, |log2FC|>0.15):", nrow(data_sorted), "genes\n")
+cat("Annotated + filtered (padj<0.05, |log2FC|>0.15):", nrow(data_sorted), "genes",
+    "| higher in cases:", sum(data_sorted$log2FoldChange > 0),
+    "| lower in cases:", sum(data_sorted$log2FoldChange < 0), "\n")
+print(data_sorted[, c("log2FoldChange", "padj")])

@@ -72,7 +72,7 @@ data_sorted <- data_filtered[order(data_filtered$abslogFC, decreasing = TRUE), ]
 saveRDS(data_complete, file = "dif_exp_genesymbol_complete.rds")
 saveRDS(data_sorted, file = "dif_exp_genesymbol_sig.rds")
 
-write_csv(data_complete, "dif_exp_genesymbol_complete.csv")
+write.csv(data_complete, "dif_exp_genesymbol_complete.csv")
 write.csv(data_sorted, "dif_exp_genesymbol_sig.csv")
 
 cat("Annotated complete results:", nrow(data_complete), "genes\n")

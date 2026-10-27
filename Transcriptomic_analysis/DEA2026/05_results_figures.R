@@ -103,10 +103,10 @@ volcano_plot <- ggplot(
     show.legend = FALSE
   ) +
   scale_color_manual(
-    values = c(
-      "Up in cases"      = "#619CFF",
-      "Down in cases"    = "#D9483F",
-      "Not significant"  = "grey60"
+  values = c(
+    "Up in cases"      = "#D9483F",
+    "Down in cases"    = "#619CFF",
+    "Not significant"  = "grey60"
     )
   ) +
   scale_x_continuous(limits = c(-max_x, max_x), breaks = pretty_breaks(n = 6)) +

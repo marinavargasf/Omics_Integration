@@ -39,12 +39,7 @@ cat("Samples aligned:", ncol(countData), "\n")
 ################################################################################
 
 dge <- DGEList(counts = countData)
-
-normFactors <- calcNormFactors(countData, method = "TMM", refColumn = 1,
-                               logratioTrim = 0.3, sumTrim = 0.05,
-                               doWeighting = TRUE, Acutoff = -1e+10)
-normFactors <- normFactors * (colSums(countData) / mean(colSums(countData)))
-names(normFactors) <- colnames(countData)
+dge <- calcNormFactors(dge, method = "TMM")
 
 logCPM <- cpm(dge, log = TRUE, prior.count = 1)
 
@@ -59,18 +54,8 @@ logCPM <- cpm(dge, log = TRUE, prior.count = 1)
 # they are variables of biological interest, not nuisance covariates, and
 # should not be regressed out of the continuous expression matrix.
 
-selectedVars <- c("Neutrophils", "RIN_Value", "Plate", "Concentration",
+selectedVars <- c("Neutrophils", "RIN_Value", "Plate", "Submitted_Volume__ul_",
                   "sex", "age_at_baseline", "race")
-
-for (v in c("Submitted_Volume__ul_", "Concentration")) {
-  if (!v %in% colnames(metadata)) {
-    warning(v, " not found in metadata -- omitted from batch correction. ",
-            "Confirm this column is genuinely absent, not just renamed.")
-    selectedVars <- setdiff(selectedVars, v)
-  } else if (!v %in% selectedVars) {
-    selectedVars <- c(selectedVars, v)
-  }
-}
 
 na_check <- sapply(metadata[, selectedVars], function(x) sum(is.na(x)))
 print(na_check)
@@ -90,6 +75,8 @@ normExpr <- removeBatchEffect(logCPM, covariates = designCovariates)
 ################################################################################
 ################################## Save outputs ###############################
 ################################################################################
+out_dir <- "./results/Results_rnaseq"
+dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
 
 saveRDS(metadata, file = "normalized_metadata.rds")

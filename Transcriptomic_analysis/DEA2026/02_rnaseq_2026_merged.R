@@ -1,110 +1,112 @@
 ################################################################################
+# Differential expression (DESeq2) -- PD cases vs controls, whole-blood RNA-seq
+# Input: checkpoints saved by 01_data_processing_rna_2026.R
 ################################################################################
 
 start_time <- Sys.time()
 cat("Start time is: ", format(start_time), "\n")
 
-library("DESeq2")
-library("dplyr")
-library("edgeR")
+library(DESeq2)
+library(dplyr)
+library(edgeR)
+library(BiocParallel)
 
-################################################################################
-################################## Read data ##################################
-################################################################################
+register(MulticoreParam(workers = 8))   # adjust to the machine
+
 setwd("~/Documents/Omics_Integration/Transcriptomic_analysis/DEA2026/")
-
-countData <- readRDS(file = "./data/rawCounts_filtered.rds")
-metadata   <- readRDS(file = "./data/confoundingDataFrame2_full.rds")
-
-metadata <- droplevels(metadata)
-# Gene filtering, MT/ribo/globin exclusion, and Ensembl mapping were already
-# done in preprocessing (with Ensembl pinned to v100) -- do NOT redo them here,
-# redoing with an unpinned useMart() call is what caused the DEG list drift.
+dir.create("results/Results_rnaseq", recursive = TRUE, showWarnings = FALSE)
 
 ################################################################################
-###################### Align countData <-> metadata ##########################
+## 1. Read and align data
 ################################################################################
+
+countData <- readRDS("./data/rawCounts_filtered.rds")
+metadata  <- droplevels(readRDS("./data/confoundingDataFrame2_full.rds"))
+# Gene filtering and MT/ribo/globin exclusion were done in preprocessing -- do NOT redo here.
 
 common_samples <- intersect(colnames(countData), rownames(metadata))
-stopifnot(length(common_samples) > 0)
 countData <- countData[, common_samples, drop = FALSE]
 metadata  <- metadata[common_samples, , drop = FALSE]
-countData <- countData[, rownames(metadata)]
 
-stopifnot(all(rownames(metadata) == colnames(countData)))
-cat("Samples aligned:", ncol(countData), "\n")
+stopifnot(identical(colnames(countData), rownames(metadata)),
+          ncol(countData) == 5731,                 # expected N after Plate x race filter
+          !anyDuplicated(rownames(countData)))     # PAR duplicates must not reach the model
+cat("Samples:", ncol(countData), "| Genes:", nrow(countData), "\n")
 
 ################################################################################
-################# Differential expression on RNA-seq data #####################
+## 2. Design
+################################################################################
+
+design_terms <- c("case_control", "visit_month", "sex", "race", "age_at_baseline",
+                  "Neutrophils", "Plate", "RIN_Value", "Normalization_Volume__30ng_ul_")
+stopifnot(all(design_terms %in% colnames(metadata)))
+
+na_check <- sapply(metadata[, design_terms], function(x) sum(is.na(x)))
+print(na_check)
+stopifnot(sum(na_check) == 0)
+
+# Reference = control, so log2FC > 0 means higher in cases
+metadata$case_control <- relevel(factor(metadata$case_control), ref = "control")
+metadata$sex   <- factor(metadata$sex)
+metadata$race  <- factor(metadata$race)
+metadata$Plate <- factor(metadata$Plate)
+
+# Scale continuous covariates (better GLM convergence; does not change the diagnosis estimate)
+cont_vars <- c("age_at_baseline", "Neutrophils", "RIN_Value", "Normalization_Volume__30ng_ul_")
+metadata[cont_vars] <- lapply(metadata[cont_vars], function(x) as.numeric(scale(x)))
+
+for (v in design_terms) {
+  n_levels <- if (is.factor(metadata[[v]])) nlevels(metadata[[v]]) else length(unique(metadata[[v]]))
+  cat(v, ": ", n_levels, " levels/unique values\n", sep = "")
+}
+
+design <- model.matrix(as.formula(paste("~", paste(design_terms, collapse = " + "))), metadata)
+stopifnot(nrow(design) == ncol(countData),   # catches silent NA-row dropping
+          limma::is.fullrank(design))
+cat("Design:", nrow(design), "samples x", ncol(design), "coefficients\n")
+
+################################################################################
+## 3. TMM-derived size factors (same settings as previous run)
 ################################################################################
 
 normFactors <- calcNormFactors(countData, method = "TMM", refColumn = 1,
                                logratioTrim = 0.3, sumTrim = 0.05,
                                doWeighting = TRUE, Acutoff = -1e+10)
-normFactors <- normFactors * (colSums(countData) / mean(colSums(countData)))
-names(normFactors) <- colnames(countData)
-
-cat("Normalization factors calculated\n")
-
-design_terms <- c("case_control", "visit_month", "sex", "age_at_baseline","race",
-                  "Neutrophils", "Plate", "RIN_Value")
-if ("Submitted_Volume__ul_" %in% colnames(metadata)) {
-  design_terms <- c(design_terms, "Submitted_Volume__ul_")
-} else {
-  warning("Submitted_Volume__ul_ not found in metadata -- omitted from design. ",
-          "Confirm this column is genuinely gone from the QC table, not just misnamed.")
-}
-
-na_check <- sapply(metadata[, design_terms], function(x) sum(is.na(x)))
-print(na_check)
-if (sum(na_check) > 0) {
-  stop("NA values present in design covariates -- model.matrix() would silently ",
-       "drop these samples. Fix upstream before proceeding.")
-}
-for (v in design_terms) {
-  n_levels <- if (is.factor(metadata[[v]])) nlevels(metadata[[v]]) else length(unique(metadata[[v]]))
-  cat(v, ": ", n_levels, " levels/unique values\n", sep = "")
-}
-design_formula <- as.formula(paste("~", paste(design_terms, collapse = " + ")))
-design <- model.matrix(design_formula, metadata)
-
-cat("Is design fullrank? \n")
-print(is.fullrank(design))
-
-cat("Does metadata and countData match? must be TRUE\n")
-print(all(rownames(metadata) == colnames(countData)))
-
-cat("Metadata dim\n")
-print(dim(metadata))
-cat("countData dim\n")
-print(dim(countData))
-cat("design ncol\n")
-print(ncol(design))
-
-stopifnot(nrow(design) == ncol(countData))  # catches silent NA-row-dropping
+sizeFactors_tmm <- normFactors * (colSums(countData) / mean(colSums(countData)))
+names(sizeFactors_tmm) <- colnames(countData)
 
 ################################################################################
+## 4. DESeq2
+################################################################################
 
-ddsFromMatrix <- DESeqDataSetFromMatrix(countData = countData,
-                                        colData = metadata,
-                                        design = design)
-
-cat("Assigning TMM-derived size factors\n")
-sizeFactors(ddsFromMatrix) <- normFactors
+dds <- DESeqDataSetFromMatrix(countData = countData, colData = metadata, design = design)
+sizeFactors(dds) <- sizeFactors_tmm
 
 cat("Running DESeq()\n")
-dds <- DESeq(ddsFromMatrix, parallel = TRUE)
+dds <- DESeq(dds, parallel = TRUE)
+saveRDS(dds, "results/Results_rnaseq/dds_2026.rds")
 
-cat("DESeq done!\n")
-cat("Available result coefficients:\n")
-print(resultsNames(dds))
+coef_dx <- grep("^case_control", resultsNames(dds), value = TRUE)
+stopifnot(length(coef_dx) == 1)
+cat("Diagnosis coefficient:", coef_dx, "(log2FC > 0 = higher in cases)\n")
 
-dir.create("results/Results_rnaseq", recursive = TRUE, showWarnings = FALSE)
-save.image("results/Results_rnaseq/deseq2_output.RData")
+res <- as.data.frame(results(dds, name = coef_dx))
+res <- res[order(res$padj), ]
+saveRDS(res, "results/Results_rnaseq/res_deseq_2026.rds")
+write.table(res, "results/Results_rnaseq/genesDiffExpressedParkinson.tsv",
+            sep = "\t", quote = FALSE, col.names = NA)
 
-# Uncomment once you've confirmed the correct coefficient name from resultsNames(dds):
-# res <- as.data.frame(results(dds, name = "case_control_control_vs_case"))
-# saveRDS(res, file = "Results_2026/res_deseq.rds")
+################################################################################
+## 5. Summary
+################################################################################
+
+degs <- res[!is.na(res$padj) & res$padj < 0.05 & abs(res$log2FoldChange) > 0.15, ]
+cat("DEGs (padj < 0.05, |log2FC| > 0.15):", nrow(degs),
+    "| higher in cases:", sum(degs$log2FoldChange > 0),
+    "| lower in cases:", sum(degs$log2FoldChange < 0), "\n")
+print(head(degs[, c("baseMean", "log2FoldChange", "padj")], 30))
+
+writeLines(capture.output(sessionInfo()), "results/Results_rnaseq/sessionInfo_deseq2_2026.txt")
 
 end_time <- Sys.time()
 cat("Time taken for analysis: ", format(end_time - start_time), "\n")
