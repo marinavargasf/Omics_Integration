@@ -110,10 +110,10 @@ for (dependent_variable in dependent_variables) {
   #if (dependent_variable)
   
   if (structure$community_structure[structure$node_names==dependent_variable] == "Protein expression"){
-    formula <- as.formula(paste(dependent_variable,  "~ ", variables_string_filtered, "+ (1|participant_id)"))
+    formula <- as.formula(paste(dependent_variable,  "~ ", variables_string_filtered, "+ (1|sex) + (1|participant_id) + (1|age_at_baseline)"))
   }
   else{
-    formula <- as.formula(paste(dependent_variable, "~ ", variables_string, "+ (1|participant_id)"))
+    formula <- as.formula(paste(dependent_variable, "~ ", variables_string, "+ (1|sex) + (1|participant_id) + (1|age_at_baseline)"))
   }
   # Create and fit the model
   model <- glmer(formula, data = long_visit)
@@ -326,9 +326,9 @@ structure <- data.frame(node_names, community_structure)
 structure <- subset(structure, structure$node_names %in% variables_to_scale)
 
 # Loop through each variable and scale it
-for (variable in variables_to_scale) {
-  long_visit[[variable]] <- scale(long_visit[[variable]])
-}
+#for (variable in variables_to_scale) {
+#  long_visit[[variable]] <- scale(long_visit[[variable]])
+#}
 
 #Check, patients are not filtered by idiopathic PD, all of them are included
 table(long_visit$diagnosis_at_baseline) 

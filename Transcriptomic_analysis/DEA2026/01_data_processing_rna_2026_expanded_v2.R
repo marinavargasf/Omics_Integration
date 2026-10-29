@@ -518,3 +518,48 @@ show_prince(resConf_after,  "Transcriptómica DESPUÉS")
 
 #show_prince(resConfPLA_before, "PLA ANTES")
 #show_prince(resConfPLA_after,  "PLA DESPUÉS")
+
+
+#TEST 
+library(swamp)
+setwd("~/Documents/Omics_Integration/Transcriptomic_analysis/DEA2026/")
+
+meta    <- readRDS("./data/confoundingDataFrame2_full.rds")
+res_bef <- readRDS("results/Bias_correction/resConf_before.rds")
+res_aft <- readRDS("results/Bias_correction/resConf_after.rds")
+
+design_vars <- c("case_control", "visit_month", "sex", "race", "age_at_baseline",
+                 "Neutrophils", "Plate", "RIN_Value", "Normalization_Volume__30ng_ul_")
+nrow(meta)   # should be 5731
+
+## 1. Plate vs Position
+meta$Position <- factor(meta$Position)
+k <- nlevels(meta$Position); k
+(k - 1) / (nrow(meta) - 1)                       # R² expected by chance
+tab_pp <- table(meta$Plate, meta$Position)
+sqrt(suppressWarnings(chisq.test(tab_pp))$statistic / (sum(tab_pp) * (min(dim(tab_pp)) - 1)))
+mean(colSums(tab_pp > 0))                        # plates per position, on average
+
+## 2. Weighted R² before/after for all variables
+wR2 <- function(res) {
+  prop <- res$prop[1:ncol(res$linp)] / 100
+  fdr  <- apply(res$linp, 2, p.adjust, method = "fdr")
+  data.frame(variable  = rownames(res$linp),
+             wR2       = round(as.vector(res$rsquared %*% prop), 4),
+             n_sig_PCs = rowSums(fdr < 0.05))
+}
+full_tab <- merge(wR2(res_bef), wR2(res_aft), by = "variable", suffixes = c("_before", "_after"))
+full_tab$in_model <- full_tab$variable %in% design_vars
+full_tab <- full_tab[order(-full_tab$wR2_before), ]
+print(full_tab, row.names = FALSE)
+write.csv(full_tab, "results/Bias_correction/covariates_wR2_before_after.csv", row.names = FALSE)
+
+## 3. Plate checks
+tab_pc <- table(meta$Plate, meta$case_control)
+c(single_group_plates = sum(apply(tab_pc, 1, function(x) any(x == 0))),
+  cramerV_plate_dx    = unname(sqrt(suppressWarnings(chisq.test(tab_pc))$statistic / sum(tab_pc))),
+  plates_one_cohort   = all(rowSums(table(meta$Plate, meta$Cohort) > 0) == 1))
+
+## 4. Neutrophils vs diagnosis
+wilcox.test(Neutrophils ~ case_control, data = meta)
+tapply(meta$Neutrophils, meta$case_control, median)
