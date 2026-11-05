@@ -280,3 +280,171 @@ setwd("~/Documents/Omics_Integration/Proteomic_analysis/Results_full_aligned/")
 score_output <- as.data.frame(submatrix)
 score_output<- cbind(row_names = rownames(score_output), score_output)
 write.csv(score_output, "CSF_proteins_clinical_top10.csv")
+
+################################################################################
+##############Plot only common proteins with CSF################################
+################################################################################
+library(readr)
+
+setwd("~/Documents/Omics_Integration/Proteomic_analysis/")
+# Step 1: Load CSF score matrix to extract CSF protein names
+pla_normalized <- as.data.frame(readRDS("~/Documents/Omics_Integration/Proteomic_analysis/Results_full_aligned/filtered_proteins_metadata_PLA_SYMBOL.rds")) 
+#csf_proteins<- colnames(data_normalized)[-c(1,2)]
+
+# top_prots_1<-readRDS("proteomic/differential_expression_proteins.rds")
+
+pla_score <- read.csv("~/Documents/Omics_Integration/Proteomic_analysis/Results_full_aligned/PLA_proteins_clinical_score_matrix.csv", row.names=1)
+pla_score <- pla_score[, -1] #Duplicated row 
+pla_proteins <- colnames(pla_score)[-(1:16)]  # remove clinical vars
+
+# Step 2: Find ALL common proteins between plasma and CSF
+common_proteins <- intersect(proteins, pla_proteins)
+print(paste("Common proteins found:", length(common_proteins)))
+print(common_proteins)
+
+# filtered_proteins_metadata_PLA <- readRDS("Results/filtered_proteins_metadata_PLA.rds")
+# filtered_proteins_metadata_CSF <- readRDS("Results/filtered_proteins_metadata_CSF.rds")
+# 
+# common_proteins_HGNC <- intersect(colnames(filtered_proteins_metadata_PLA),colnames(filtered_proteins_metadata_CSF))
+# 
+# 
+# 
+# de_proteins_metadata_PLA <- readRDS("Results/differential_expression_proteins_PLA.rds")
+# de_proteins_metadata_CSF <- readRDS("Results/differential_expression_proteins_CSF.rds")
+# 
+# common_proteins_DEG <- intersect(rownames(de_proteins_metadata_PLA),rownames(de_proteins_metadata_CSF))
+
+# Step 3: Build selected variables with ALL common proteins
+
+# Ordered by participant id
+long_visit <- multiple_visit %>%
+  arrange(participant_id) %>%
+  group_by(participant_id)
+
+# Scale to z-score continuous variables
+# List of variables to scale
+variables_to_scale <- c("UPDRS1", "UPDRS2", "UPDRS3", "UPDRS4", "MOCA", "Mobility39", 
+                        "ADL39", "Emotional39", "Stigma39", "Social39", "Cognition39", 
+                        "Communication39", "Discomfort39", "Schwad_ADL", "ESS", "UPSIT",
+                        common_proteins)
+
+structure <- data.frame(node_names, community_structure)
+
+structure <- subset(structure, structure$node_names %in% variables_to_scale)
+
+# Loop through each variable and scale it
+#for (variable in variables_to_scale) {
+#  long_visit[[variable]] <- scale(long_visit[[variable]])
+#}
+
+#Check, patients are not filtered by idiopathic PD, all of them are included
+table(long_visit$diagnosis_at_baseline) 
+
+
+#3. Build multiple Linear Mixed Model 
+
+#Select variables to include on network
+dependent_variables <- variables_to_scale
+
+filtered_variables <- structure$node_names[structure$community_structure != "Protein expression"]
+
+variables_string <- paste(variables_to_scale, collapse = " + ")
+variables_string_filtered <-  paste(filtered_variables, collapse = " + ")
+
+
+models <- list()
+# Loop through each dependent variable
+for (dependent_variable in dependent_variables) {
+  # Create formula for the model
+  #if (dependent_variable)
+  
+  if (structure$community_structure[structure$node_names==dependent_variable] == "Protein expression"){
+    formula <- as.formula(paste(dependent_variable,  "~ ", variables_string_filtered, " + (1|sex) + (1|participant_id) + (1|age_at_baseline)"))
+  }
+  else{
+    formula <- as.formula(paste(dependent_variable, "~ ", variables_string, "+ (1|sex) + (1|participant_id) + (1|age_at_baseline)"))
+  }
+  # Create and fit the model
+  model <- glmer(formula, data = long_visit)
+  
+  # Print the model summary
+  #print(summary(model))
+  
+  # Optionally, you can store the model in a list or perform further analysis
+  models[[dependent_variable]] <- summary(model)$coefficients[,3]
+}
+
+# Encontrar el número máximo de coeficientes entre todos los modelos
+max_length <- max(sapply(models, length))
+
+# Añadir ceros a los modelos que tienen menos coeficientes
+for (depentent_variable in dependent_variables) {
+  if (length(models[[depentent_variable]]) < max_length) {
+    # Calcular cuántos ceros agregar
+    diff <- max_length - length(models[[depentent_variable]])
+    # Agregar los ceros
+    models[[depentent_variable]] <- c(models[[depentent_variable]], rep(0, diff))
+  }
+}
+
+# Convert list of lists into matrix
+score<- do.call(rbind, models)
+colnames(score)[1] <- variables_to_scale[1]
+
+source("~/Documents/Parkinson/shifted_matrix.R")
+
+# Change format of score matrix using external functions 
+score_matrix <- score_matrix(score, shift_matrix(score))
+
+
+# Plot adjusted node size
+qgraph(score_matrix, groups = structure$community_structure,  layout="spring", color=c("lightgreen", "lightblue","orange","#B9AEDC", "pink","grey") ) 
+
+# Addition ( M + t(M) )
+symm_score <- (score_matrix + t(score_matrix) )/2
+
+# Plot new network (symmetrical)
+qgraph(symm_score, groups = structure$community_structure,  layout="spring", color=c("lightgreen", "lightblue","orange","#B9AEDC","pink","grey") ) 
+
+##Transform interaction between clinical variables to 0
+
+is_gene <- structure$community_structure == "Protein expression"
+
+# Bucle para convertir interacciones entre nodos que no son genes en 0 (eliminamos interacciones clinica-clinica)
+for (i in 1:nrow(symm_score)) {
+  for (j in 1:ncol(symm_score)) {
+    # Si ambos nodos no son genes, establecer la interacción en 0
+    if (!is_gene[i] & !is_gene[j]) {
+      symm_score[i, j] <- 0
+    }
+  }
+}
+# Plot new network (without gene-gene interaction)
+qgraph(symm_score,  groups = structure$community_structure,  layout="spring", color=c("lightgreen", "lightblue","orange","#B9AEDC","pink","grey")  ) 
+
+# Step 7: Plot
+setwd("~/Documents/Omics_Integration/Proteomic_analysis/Results_full_aligned/")
+
+el <- make_edge_labels(symm_score, threshold = 2)
+ec_labels <- make_edge_colors(el)                     # for label text (unchanged)
+ec_lines  <- make_edge_colors_gradient(symm_score, exponent = 1.6)      # for edge lines (independent
+
+# ------------------------------------------------------------------------
+# PLA_commonCSF_allproteins plot -- PNG, SVG, PDF
+# ------------------------------------------------------------------------
+lay <- network_layout(symm_score)
+
+png("CSF_commonPLA_allproteins.png", width = fig_w, height = fig_h, units = "in", res = 300)
+plot_net(symm_score, lay); dev.off()
+
+svg("CSF_commonPLA_allproteins.svg", width = fig_w, height = fig_h)
+plot_net(symm_score, lay); dev.off()
+
+pdf("CSF_commonPLA_allproteins.pdf", width = fig_w, height = fig_h)
+plot_net(symm_score, lay); dev.off()
+
+
+# Step 8: Save matrix
+score_output_common <- as.data.frame(symm_score)
+score_output_common <- cbind(row_names = rownames(score_output_common), score_output_common)
+write.csv(score_output_common, "CSF_commonPLA_allproteins_score_matrix.csv")
