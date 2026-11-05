@@ -425,7 +425,14 @@ ec_lines  <- make_edge_colors_gradient(symm_score, exponent = 1.6)      # for ed
 # ------------------------------------------------------------------------
 # PLA_commonCSF_allproteins plot -- PNG, SVG, PDF
 # ------------------------------------------------------------------------
-lay <- network_layout(symm_score)
+# Use the CSF common-network layout so both figures share node positions
+csf_common <- read.csv("CSF_commonPLA_allproteins_score_matrix.csv", row.names = 1, check.names = FALSE)
+csf_common <- as.matrix(csf_common[, colnames(csf_common) != "row_names"])
+
+lay <- network_layout(csf_common)
+stopifnot(nrow(lay) == nrow(csf_common))
+rownames(lay) <- rownames(csf_common)
+lay <- lay[rownames(symm_score), ]   # same positions, matched by node name
 
 png("PLA_commonCSF_allproteins.png", width = fig_w, height = fig_h, units = "in", res = 300)
 plot_net(symm_score, lay); dev.off()
