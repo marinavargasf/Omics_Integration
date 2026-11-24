@@ -29,7 +29,8 @@ Omics_Integration/
 ├── R/
 │   └── network_layout.R           # shared qgraph layout and edge helpers (sourced by 12, 14, 15)
 ├── resources/                     # small fixed reference files, no participant data (see resources/README.md)
-├── clinical_processing/           # reading and processing of the clinical variables (sourced by 00b, 12–16)
+├── clinical_processing/
+│   └── clinical_data.R            # reading and processing of the clinical variables (sourced by 00b, 12–16)
 ├── data/                          # NOT distributed: raw inputs (see data/README.md)
 └── results/                       # created by the pipeline (git-ignored)
 ```
@@ -55,7 +56,7 @@ All paths are relative to the repository root through [`here::here()`](https://h
                                       │ 11 Cohort description
                                       ▼
                        MariNET integration with clinical data
-          12 DEGs · 13 GO pathways · 14 Plasma DAPs · 15 CSF DAPs
+          12 DEGs · 13 GO pathways · 14 CSF DAPs · 15 Plasma DAPs
                                       │
                                       ▼
                    16 DDC–UPDRS IV follow-up (logistic GLMM)
@@ -68,7 +69,7 @@ All paths are relative to the repository root through [`here::here()`](https://h
 | # | Script | What it does | Main outputs |
 |---|--------|--------------|--------------|
 | 00a | `00a_setup.R` | Checks packages (MariNET ≥ 2.0.0), creates `results/`, checks that all inputs exist | — |
-| 00b | `00b_clinical_metadata.R` | Sources `clinical_processing/` (reading and processing of the AMP PD clinical variables) and saves participant-level metadata | `results/clinical/metadata.rds` |
+| 00b | `00b_clinical_metadata.R` | Sources `clinical_processing/clinical_data.R` (reading and processing of the AMP PD clinical variables) and saves participant-level metadata | `results/clinical/metadata.rds` |
 | 01 | `01_transcriptomics_preprocessing_QC.R` | Sample QC (unmapped mismatches < 5 %, RIN ≥ 6.5), neutrophil % imputation (31-gene linear model trained on PPMI hematology), case/control definition, gene filtering (CPM > 10 in ≥ 80 % of samples; MT, ribosomal and globin genes removed), removal of rare Plate × race combinations. swamp/PCA diagnostics before and after covariate correction | `results/transcriptomics/data/`, `results/transcriptomics/bias_correction/` |
 | 02 | `02_transcriptomics_DESeq2.R` | DESeq2 with TMM-derived size factors. Design: `~ case_control + visit_month + sex + race + age_at_baseline + Neutrophils + Plate + RIN_Value + Normalization_Volume`, with controls as the reference level | `results/transcriptomics/deseq2/res_deseq_2026.rds` |
 | 03 | `03_transcriptomics_annotation.R` | Ensembl → HGNC annotation, DEG selection (padj < 0.05, \|log2FC\| > 0.15) | `dif_exp_genesymbol_{complete,sig}.rds` |
@@ -82,8 +83,8 @@ All paths are relative to the repository root through [`here::here()`](https://h
 | 11 | `11_cohort_description.R` | Participants, samples, demographics and visits per omic layer, plus cross-layer overlap | console output |
 | 12 | `12_MariNET_transcriptomics.R` | MariNET network: DEGs × clinical variables (PD cases), top-10 genes by max \|t\| | `results/transcriptomics/marinet/` |
 | 13 | `13_MariNET_pathways_GO.R` | MariNET network: GSVA GO pathway scores × clinical variables | `results/pathways/GO_clinical_score_matrix_MariNET2.csv` |
-| 14 | `14_MariNET_proteomics_PLA.R` | MariNET network: plasma DAPs × clinical variables, top-10 DAPs, and DAPs shared with CSF | `results/proteomics/PLA_*` |
-| 15 | `15_MariNET_proteomics_CSF.R` | MariNET network: CSF DAPs × clinical variables, top-10 DAPs, and DAPs shared with plasma | `results/proteomics/CSF_*` |
+| 14 | `14_MariNET_proteomics_CSF.R` | MariNET network: CSF DAPs × clinical variables, top-10 DAPs, and DAPs shared with plasma | `results/proteomics/CSF_*` |
+| 15 | `15_MariNET_proteomics_PLA.R` | MariNET network: plasma DAPs × clinical variables, top-10 DAPs, and DAPs shared with CSF (drawn with the CSF layout so both figures match) | `results/proteomics/PLA_*` |
 | 16 | `16_DDC_UPDRS4_followup.R` | Follow-up of the CSF DDC–UPDRS IV association: UPDRS IV > 0 modelled with a logistic mixed model (`glmer`), adjusted for PD treatment, with a DDC × time interaction | `results/proteomics/DDC_UPDRS4_followup/` |
 
 **MariNET models (12–15).** These use `MariNET::lmm_integration_analysis()` with random effects `(1|sex) + (1|participant_id) + (1|age_at_baseline)`. Each clinical variable is modelled on the molecular features and the other clinical variables. Each molecular feature is modelled on the clinical variables. The edge weight is the mean of both t-values, and only molecular–clinical edges are kept.
@@ -108,7 +109,7 @@ data/
 │   │   │       ├── releases_2023_v4release_1027_clinical_Demographics.csv
 │   │   │       ├── releases_2023_v4release_1027_clinical_PD_Medical_History.csv
 │   │   │       ├── releases_2023_v4release_1027_clinical_MDS_UPDRS_Part_{I,II,III,IV}.csv
-│   │   │       └── ...                         # MOCA, PDQ_39, UPSIT, Epworth, ... (see clinical_processing/DataReading_v4.R)
+│   │   │       └── ...                         # MOCA, PDQ_39, UPSIT, Epworth, ... (see clinical_processing/clinical_data.R)
 │   │   └── transcriptomics_v4/
 │   │       ├── reports/
 │   │       │   ├── releases_2023_v4release_1027_rnaseq-WB-RWTS_sequencing_metrics_rna_quality_metrics.csv
@@ -133,7 +134,7 @@ data/
 
 ### 3. Clinical variables
 
-The clinical variables are read and processed by the two scripts in [`clinical_processing/`](clinical_processing/README.md) (`DataReading_v4.R`, `data_processing.R`), directly from the AMP PD clinical tables. `00b_clinical_metadata.R` saves the participant-level metadata, and scripts 12–16 source the same two files to build the visit-level clinical table.
+The clinical variables are read and processed by [`clinical_processing/clinical_data.R`](clinical_processing/README.md), directly from the AMP PD clinical tables. `00b_clinical_metadata.R` saves the participant-level metadata, and scripts 12–16 source the same file to build the visit-level clinical table.
 
 ### 4. Fixed reference files (`resources/`)
 
@@ -177,20 +178,15 @@ Rscript scripts/10_proteomics_volcano.R            # compartment <- "CSF"  (edit
 Rscript scripts/11_cohort_description.R
 Rscript scripts/12_MariNET_transcriptomics.R
 Rscript scripts/13_MariNET_pathways_GO.R
-Rscript scripts/14_MariNET_proteomics_PLA.R         # 1st pass, see run notes
-Rscript scripts/15_MariNET_proteomics_CSF.R
-Rscript scripts/14_MariNET_proteomics_PLA.R         # 2nd pass
+Rscript scripts/14_MariNET_proteomics_CSF.R
+Rscript scripts/15_MariNET_proteomics_PLA.R
 Rscript scripts/16_DDC_UPDRS4_followup.R
 ```
 
 ### Run notes
 
 - **10 – volcano plots.** The tissue is set at the top of the script (`compartment <- "CSF"`). Run it once with `"CSF"` and once with `"PLA"`.
-- **14 ↔ 15 – shared-protein networks.** The last section of each proteomics network script builds the network of DAPs shared by CSF and plasma, and reads score matrices written by the other script:
-  - 15 (CSF) reads `PLA_proteins_clinical_score_matrix.csv`, written by 14.
-  - 14 (plasma) reads `CSF_proteins_clinical_score_matrix.csv` and `CSF_commonPLA_allproteins_score_matrix.csv`, written by 15. It uses the CSF layout so that both figures place the nodes in the same positions.
-
-  On a clean run, therefore: run 14 (its last section stops because the CSF files do not exist yet, but the full plasma network is already saved), then 15, then 14 again.
+- **14 → 15 – shared-protein networks.** The plasma script (15) reads `CSF_proteins_clinical_score_matrix.csv` and `CSF_commonPLA_allproteins_score_matrix.csv` from the CSF script (14), and reuses the CSF layout so that both shared-protein figures place the nodes in the same positions. Run 14 before 15.
 - **Expected checkpoints.** The scripts contain `stopifnot()` checks against the published run: 5,731 RNA-seq samples after QC (scripts 02 and 04) and 13 DEGs (script 03). If one of them fails, the input data or package versions differ from the original analysis.
 - **Runtime.** Script 02 (DESeq2 on about 5,700 samples) is the slowest step. It runs in parallel with 8 workers (`MulticoreParam(workers = 8)`); change this to suit your machine.
 

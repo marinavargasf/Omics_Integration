@@ -35,8 +35,7 @@ setwd(here::here("results/proteomics/"))
 
 ## ---- 1. Rebuild master_matrix exactly as in the CSF pipeline ---------------
 
-source(here::here("clinical_processing/DataReading_v4.R"))
-source(here::here("clinical_processing/data_processing.R"))
+source(here::here("clinical_processing/clinical_data.R"))
 
 data_normalized <- as.data.frame(readRDS(here::here("results/proteomics/filtered_proteins_metadata_CSF_SYMBOL.rds")))
 cat("DDC (raw NPX) mean:", mean(data_normalized$DDC), " SD:", sd(data_normalized$DDC), "\n")

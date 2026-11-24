@@ -6,8 +6,7 @@
 # `clinical_data` (visit level) and `metadata` (participant level).
 ################################################################################
 
-source(here::here("clinical_processing/DataReading_v4.R"))
-source(here::here("clinical_processing/data_processing.R"))
+source(here::here("clinical_processing/clinical_data.R"))
 
 # 07, 08 and 11 select metadata columns by position: c(1, 11, 13, 14)
 stopifnot(colnames(metadata)[1] == "participant_id",

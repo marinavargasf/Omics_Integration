@@ -14,8 +14,7 @@ library(MariNET)
 stopifnot(packageVersion("MariNET") >= "2.0.0")
 
 #Run required previous scripts
-source(here::here("clinical_processing/DataReading_v4.R"))
-source(here::here("clinical_processing/data_processing.R"))
+source(here::here("clinical_processing/clinical_data.R"))
 
 setwd(here::here("results/pathways/")) #or results!
 

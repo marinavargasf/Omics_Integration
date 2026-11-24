@@ -51,7 +51,7 @@ olink <- "data/raw/proteomics/Targeted olink"
 rel  <- "releases_2023_v4release_1027_"
 
 required <- c(
-  # AMP PD v4.0 - clinical tables (clinical_processing/DataReading_v4.R reads the whole folder)
+  # AMP PD v4.0 - clinical tables (clinical_processing/clinical_data.R reads the whole folder)
   file.path(amp, "clinical_metadata_v4_2023", paste0(rel, "amp_pd_participants.csv")),
   file.path(amp, "clinical_metadata_v4_2023/clinical", paste0(rel, "clinical_Demographics.csv")),
   file.path(amp, "clinical_metadata_v4_2023/clinical", paste0(rel, "clinical_PD_Medical_History.csv")),
