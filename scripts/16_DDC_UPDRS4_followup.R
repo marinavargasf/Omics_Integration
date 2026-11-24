@@ -50,8 +50,7 @@ master_matrix <- merge(clinical_data, metadata, by = "participant_id", all.x = T
 master_matrix <- master_matrix %>%
   dplyr::select(participant_id, visit_month, study, diagnosis_at_baseline, age_at_baseline, sex, race,
                 case_control_other_at_baseline, global_famhistory, on_levodopa, on_dopamine_agonist,
-                on_other_pd_medications, has_known_GBA_mutation_in_WGS, has_known_LRRK2_mutation_in_WGS,
-                has_known_SNCA_mutation_in_WGS, has_known_APOE_E4_mutation_in_WGS, has_known_PD_Mutation_in_WGS,
+                on_other_pd_medications,
                 mds_updrs_part_i_summary_score, mds_updrs_part_ii_summary_score, mds_updrs_part_iii_summary_score,
                 mds_updrs_part_iv_summary_score, moca_total_score,
                 pdq39_mobility_score, pdq39_adl_score, pdq39_emotional_score, pdq39_stigma_score,
@@ -62,7 +61,6 @@ master_matrix <- master_matrix %>%
 node_names <- c("participant_id", "visit_month", "study", "diagnosis_at_baseline", "age_at_baseline",
                  "sex", "race", "case_control_other_at_baseline", "global_famhistory",
                  "levodopa", "dopamine", "other_med",
-                 "GBA_mut", "LRRK2_mut", "SNCA_mut", "APOE_E4_mut", "PD_Mut",
                  "UPDRS1", "UPDRS2", "UPDRS3", "UPDRS4", "MOCA", "Mobility39", "ADL39", "Emotional39",
                  "Stigma39", "Social39", "Cognition39", "Communication39", "Discomfort39", "Schwad_ADL",
                  "REM", "ESS", "UPSIT", proteins)

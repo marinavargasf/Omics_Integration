@@ -253,7 +253,8 @@ clinical_data<- clinical_data %>% select(participant_id, visit_month, test_abeta
                                           mds_updrs_part_ii_summary_score, mds_updrs_part_iii_summary_score, code_upd2hy_hoehn_and_yahr_stage
                                          ,mds_updrs_part_iv_summary_score, moca_total_score, pdq39_mobility_score, pdq39_adl_score, pdq39_emotional_score
                                          ,pdq39_stigma_score, pdq39_social_score, pdq39_cognition_score, pdq39_communication_score, pdq39_discomfort_score
-                                         ,Schwad_ADL_score, REM_score, ess_sleepiness_score, upsit_total_score)
+                                         ,Schwad_ADL_score, REM_score, ess_sleepiness_score, upsit_total_score
+                                         ,on_levodopa, on_dopamine_agonist, on_other_pd_medications) # medication: needed by 16
 
 
 # Transform empty values to NA
@@ -279,7 +280,7 @@ numeric_cols <- names(clinical_data)[sapply(clinical_data, is.numeric)]
 
 numeric_cols <- numeric_cols[-1]
 
-non_numeric_cols <- names(df_preparado)[3:5]
+non_numeric_cols <- c(names(df_preparado)[3:5], "on_levodopa", "on_dopamine_agonist", "on_other_pd_medications")
 
 # Grouping and calculating the mean for the numerical columns manually
 df_limpio <- df_preparado %>%

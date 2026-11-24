@@ -29,7 +29,7 @@ table(isUnique(rownames(proteomic_raw)))
 
 metadata <- readRDS(file = here::here("results/clinical/metadata.rds"))
 
-samples <- merge(samples_full, metadata[,c(1,11,13,14)]) 
+samples <- merge(samples_full, metadata[, c("participant_id", "case_control_other_at_baseline", "age_at_baseline", "sex")]) 
 
 colnames(samples)[colnames(samples)=="case_control_other_at_baseline"] <- "condition" 
 
@@ -160,7 +160,7 @@ table(isUnique(rownames(proteomic_raw)))
 
 metadata <- readRDS(file = here::here("results/clinical/metadata.rds"))
 
-samples <- merge(samples_full, metadata[,c(1,11,13,14)])
+samples <- merge(samples_full, metadata[, c("participant_id", "case_control_other_at_baseline", "age_at_baseline", "sex")])
 
 colnames(samples)[colnames(samples)=="case_control_other_at_baseline"] <- "condition"
 

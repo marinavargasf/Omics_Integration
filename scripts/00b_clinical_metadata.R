@@ -8,10 +8,9 @@
 
 source(here::here("clinical_processing/clinical_data.R"))
 
-# 07, 08 and 11 select metadata columns by position: c(1, 11, 13, 14)
-stopifnot(colnames(metadata)[1] == "participant_id",
-          setequal(colnames(metadata)[c(11, 13, 14)],
-                   c("case_control_other_at_baseline", "sex", "age_at_baseline")))
+# Columns used by 07, 08 and 11 (selected by name)
+stopifnot(all(c("participant_id", "case_control_other_at_baseline",
+                "age_at_baseline", "sex") %in% colnames(metadata)))
 
 dir.create(here::here("results/clinical"), recursive = TRUE, showWarnings = FALSE)
 saveRDS(metadata, here::here("results/clinical/metadata.rds"))

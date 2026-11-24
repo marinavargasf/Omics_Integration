@@ -48,7 +48,7 @@ rownames(proteomic_raw_csf) <- proteomic_raw_csf[[1]]
 proteomic_raw_csf <- proteomic_raw_csf[, -1]
 cat("CSF — samples in protein-expression matrix:", ncol(proteomic_raw_csf), "\n")
 
-samples_CSF_full <- merge(samples_CSF_raw, metadata_prot[, c(1, 11, 13, 14)])
+samples_CSF_full <- merge(samples_CSF_raw, metadata_prot[, c("participant_id", "case_control_other_at_baseline", "age_at_baseline", "sex")])
 colnames(samples_CSF_full)[colnames(samples_CSF_full) == "case_control_other_at_baseline"] <- "condition"
 samples_CSF <- samples_CSF_full %>% filter(condition %in% c("Case", "Control"))
 
@@ -93,7 +93,7 @@ rownames(proteomic_raw_pla) <- proteomic_raw_pla[[1]]
 proteomic_raw_pla <- proteomic_raw_pla[, -1]
 cat("PLA — samples in protein-expression matrix:", ncol(proteomic_raw_pla), "\n")
 
-samples_plasma_full <- merge(samples_plasma_raw, metadata_prot[, c(1, 11, 13, 14)])
+samples_plasma_full <- merge(samples_plasma_raw, metadata_prot[, c("participant_id", "case_control_other_at_baseline", "age_at_baseline", "sex")])
 colnames(samples_plasma_full)[colnames(samples_plasma_full) == "case_control_other_at_baseline"] <- "condition"
 samples_plasma <- samples_plasma_full %>% filter(condition %in% c("Case", "Control"))
 

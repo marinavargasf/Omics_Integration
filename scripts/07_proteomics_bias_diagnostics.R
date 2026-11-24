@@ -40,7 +40,7 @@ load_olink_matrix <- function(matrix_dir_tag) {
 
   metadata <- readRDS(file = here::here("results/clinical/metadata.rds"))
 
-  samples <- merge(samples_full, metadata[, c(1, 11, 13, 14)])
+  samples <- merge(samples_full, metadata[, c("participant_id", "case_control_other_at_baseline", "age_at_baseline", "sex")])
   colnames(samples)[colnames(samples) == "case_control_other_at_baseline"] <- "condition"
   samples <- samples %>% dplyr::select(participant_id, sample_id, condition, sex, age_at_baseline, visit_month)
   samples$condition <- factor(samples$condition)
