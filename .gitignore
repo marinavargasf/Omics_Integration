@@ -1,0 +1,14 @@
+# Participant-level data: never commit
+data/*
+!data/README.md
+
+# Pipeline outputs
+results/
+
+# R / RStudio
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj.user
+.DS_Store
