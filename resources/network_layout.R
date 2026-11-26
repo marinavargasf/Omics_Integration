@@ -14,19 +14,22 @@ clinical_order <- c("UPDRS1", "UPDRS2", "UPDRS3", "UPDRS4", "MOCA",
                     "Cognition39", "Communication39", "Discomfort39",
                     "Schwad_ADL", "ESS", "UPSIT")
 
-# Run ONCE, on symm_score BEFORE muting clinical-clinical edges
-make_clinical_layout <- function(symm_score) {
-  lay <- qgraph(symm_score[clinical_order, clinical_order],
-                layout = "spring", DoNotPlot = TRUE)$layout
+# Positions of the clinical nodes. Uses resources/clinical_layout.rds if it
+# exists; otherwise places them on a fixed circle in clinical_order
+# (deterministic, no data needed).
+get_clinical_layout <- function() {
+  if (file.exists(clinical_layout_file)) return(readRDS(clinical_layout_file))
+  a   <- pi / 2 - 2 * pi * (seq_along(clinical_order) - 1) / length(clinical_order)
+  lay <- cbind(cos(a), sin(a))
   rownames(lay) <- clinical_order
-  saveRDS(lay, clinical_layout_file)
+  lay
 }
 
-# Every figure: clinical nodes at the saved positions (same in all networks),
+# Every figure: clinical nodes at the same positions in all networks,
 # molecular nodes on an outer ring, ordered by the direction of their
 # clinical partners
 network_layout <- function(mat, r_in = 3.2, r_out = 5.5) {
-  clin <- readRDS(clinical_layout_file)
+  clin <- get_clinical_layout()
   inn  <- match(rownames(clin), colnames(mat))
   stopifnot(!anyNA(inn))
   out  <- setdiff(seq_len(ncol(mat)), inn)
