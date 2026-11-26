@@ -1,7 +1,7 @@
 # Participant-level data: never commit
 data/*
 !data/README.md
-resources/*
+resources/*.rds
 
 # Pipeline outputs
 results/
