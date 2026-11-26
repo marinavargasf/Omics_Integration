@@ -3,7 +3,8 @@
 # Run once before the pipeline (from the repository root / .Rproj).
 #   1. Checks that the required R packages are installed (and MariNET >= 2.0.0)
 #   2. Creates the output folder tree under results/
-#   3. Checks that the external inputs (AMP PD / PPMI data and resources/)
+#   3. Checks that the external inputs (AMP PD / PPMI data and the network
+#      layout in resources/)
 #      are in place and reports anything missing
 # It does not modify any data.
 ################################################################################
@@ -62,9 +63,8 @@ required <- c(
   file.path(amp, "transcriptomics_v4/subread_feature-counts", paste0(rel, "rnaseq-WB-RWTS_subread_feature-counts_matrix.featureCounts.tsv")),
   # PPMI hematology (neutrophil counts)
   "data/raw/PPMI/Blood_Chemistry___Hematology_10Mar2025.csv",
-  # Fixed reference files (see resources/README.md)
-  "resources/clinical_layout.rds",
-  "resources/uniprot_to_hgnc_mapping_full.rds"
+  # Fixed positions of the clinical nodes in the network figures (see resources/README.md)
+  "resources/clinical_layout.rds"
 )
 for (tissue in c("CSF", "PLA")) {
   base <- file.path(olink, paste0("proteomics-", tissue, "-PPEA-D03"))
@@ -77,16 +77,16 @@ for (tissue in c("CSF", "PLA")) {
                      c("cardiometabolic", "inflammation", "neurology", "oncology"), ".csv")))
 }
 
-# Optional: cached Ensembl annotations. If absent they are rebuilt from the
-# current Ensembl release, which may differ slightly from the published run.
+# Cached Ensembl annotations: built on the first run if absent (needs internet)
 optional <- c("resources/gene_map_v100_full.rds",
-              "resources/exclude_genes_ENSEMBL_v100.rds")
+              "resources/exclude_genes_ENSEMBL_v100.rds",
+              "resources/uniprot_to_hgnc_mapping_full.rds")
 
 ok_req <- file.exists(here::here(required))
 ok_opt <- file.exists(here::here(optional))
 
 if (any(!ok_opt)) {
-  message("Optional cached annotation(s) not found (will be rebuilt from Ensembl):\n  ",
+  message("Cached annotation(s) not found (will be built from Ensembl on the first run):\n  ",
           paste(optional[!ok_opt], collapse = "\n  "))
 }
 if (any(!ok_req)) {

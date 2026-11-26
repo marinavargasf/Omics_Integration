@@ -1,7 +1,9 @@
 ################################################################################
 # Translate UniProt IDs -> HGNC gene symbols (CSF + PLA)
-# Uses the cached mapping (no Ensembl query unless IDs are missing and
-# QUERY_MISSING = TRUE). Produces symbol-named:
+# Uses the cached mapping if it exists; otherwise builds it from Ensembl
+# (uniprotswissprot -> hgnc_symbol) on the first run and caches it in
+# resources/. With a cache, Ensembl is only queried for IDs absent from it
+# when QUERY_MISSING = TRUE. Produces symbol-named:
 #   - full DEA tables
 #   - DAP tables (same thresholds as the DEA script: |logFC| >= 0.2, adj.P.Val <= 0.05)
 #   - filtered_proteins_metadata (MariNET input)
@@ -21,8 +23,9 @@ QUERY_MISSING <- FALSE   # TRUE = query Ensembl only for IDs absent from the cac
 ################################################################################
 
 mapping_file <- here::here("resources/uniprot_to_hgnc_mapping_full.rds")
-stopifnot("Cached mapping not found" = file.exists(mapping_file))
-id_to_symbol <- readRDS(mapping_file)
+has_cache <- file.exists(mapping_file)
+id_to_symbol <- if (has_cache) readRDS(mapping_file) else setNames(character(0), character(0))
+if (!has_cache) message("No cached mapping: building it from Ensembl")
 
 # Manual fixes for IDs Ensembl does not map via uniprotswissprot
 manual_map <- c(O15197 = "EPHB6")
@@ -49,7 +52,7 @@ dea_full <- lapply(setNames(tissues, tissues), function(t) {
 all_ids <- unique(unlist(lapply(dea_full, rownames)))
 missing <- setdiff(all_ids, names(id_to_symbol))
 
-if (length(missing) > 0 && QUERY_MISSING) {
+if (length(missing) > 0 && (QUERY_MISSING || !has_cache)) {
   library(biomaRt)
   mart <- useEnsembl("ensembl", dataset = "hsapiens_gene_ensembl")
   extra <- getBM(attributes = c("uniprotswissprot", "hgnc_symbol"),

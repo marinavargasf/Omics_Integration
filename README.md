@@ -26,9 +26,8 @@ Omics_Integration/
 │   ├── 01_transcriptomics_preprocessing_QC.R
 │   ├── ...
 │   └── 16_DDC_UPDRS4_followup.R
-├── resources/
+├── resources/                     # see resources/README.md
 │   └── network_layout.R           # shared qgraph layout and edge helpers (sourced by 12, 14, 15)
-├── resources/                     # small fixed reference files, no participant data (see resources/README.md)
 ├── clinical_processing/
 │   └── clinical_data.R            # reading and processing of the clinical variables (sourced by 00b, 12–16)
 ├── data/                          # NOT distributed: raw inputs (see data/README.md)
@@ -79,7 +78,7 @@ All paths are relative to the repository root through [`here::here()`](https://h
 | 07 | `07_proteomics_bias_diagnostics.R` | swamp/PCA diagnostics of the raw Olink NPX matrices (CSF and plasma). Diagnostic only | `results/proteomics/bias_correction/` |
 | 08 | `08_proteomics_DAP_limma.R` | limma, cases vs controls (`~0 + condition + visit_month + sex + age_at_baseline`), DAPs: adj. P ≤ 0.05 and \|logFC\| ≥ 0.2, for CSF and for plasma | `results/proteomics/*differential_expression_proteins_{CSF,PLA}.rds` |
 | 09 | `09_proteomics_uniprot_to_symbol.R` | UniProt → HGNC translation using a single fixed mapping; composite (heterodimer) IDs are removed | `*_SYMBOL.rds` (MariNET input) |
-| 10 | `10_proteomics_volcano.R` | Volcano plots of DAPs (see [run notes](#run-notes)) | `volcano_DAPs_case_vs_control_{CSF,PLA}.*` |
+| 10 | `10_proteomics_volcano.R` | Volcano plots of DAPs for CSF and plasma in one run (red = up in cases, blue = down) | `volcano_DAPs_case_vs_control_{CSF,PLA}.*` |
 | 11 | `11_cohort_description.R` | Participants, samples, demographics and visits per omic layer, plus cross-layer overlap | console output |
 | 12 | `12_MariNET_transcriptomics.R` | MariNET network: DEGs × clinical variables (PD cases), top-10 genes by max \|t\| | `results/transcriptomics/marinet/` |
 | 13 | `13_MariNET_pathways_GO.R` | MariNET network: GSVA GO pathway scores × clinical variables | `results/pathways/GO_clinical_score_matrix_MariNET2.csv` |
@@ -136,9 +135,9 @@ data/
 
 The clinical variables are read and processed by [`clinical_processing/clinical_data.R`](clinical_processing/README.md), directly from the AMP PD clinical tables. `00b_clinical_metadata.R` saves the participant-level metadata, and scripts 12–16 source the same file to build the visit-level clinical table.
 
-### 4. Fixed reference files (`resources/`)
+### 4. Reference files (`resources/`)
 
-Small lookup tables with no participant data, kept under version control so that the gene and protein identifiers, and the network layouts, match the published results exactly. See [`resources/README.md`](resources/README.md).
+`resources/` holds the shared network-plotting helpers (`network_layout.R`) and the local reference caches. The Ensembl gene and protein annotations used by scripts 01, 03, 04 and 09 are downloaded on the first run (internet connection needed) and cached there. Ensembl annotations change between releases, so a few gene or protein symbols may differ slightly from the published run. The network figures (12, 14, 15) also need `resources/clinical_layout.rds`, which fixes the positions of the clinical nodes. See [`resources/README.md`](resources/README.md).
 
 ---
 
@@ -173,8 +172,7 @@ packageVersion("MariNET")  # must be >= 2.0.0
 ```bash
 Rscript scripts/00a_setup.R
 Rscript scripts/00b_clinical_metadata.R
-for i in 01 02 03 04 05 06 07 08 09; do Rscript scripts/${i}_*.R; done
-Rscript scripts/10_proteomics_volcano.R            # compartment <- "CSF"  (edit to "PLA" and run again)
+for i in 01 02 03 04 05 06 07 08 09 10; do Rscript scripts/${i}_*.R; done
 Rscript scripts/11_cohort_description.R
 Rscript scripts/12_MariNET_transcriptomics.R
 Rscript scripts/13_MariNET_pathways_GO.R
@@ -185,7 +183,6 @@ Rscript scripts/16_DDC_UPDRS4_followup.R
 
 ### Run notes
 
-- **10 – volcano plots.** The tissue is set at the top of the script (`compartment <- "CSF"`). Run it once with `"CSF"` and once with `"PLA"`.
 - **14 → 15 – shared-protein networks.** The plasma script (15) reads `CSF_proteins_clinical_score_matrix.csv` and `CSF_commonPLA_allproteins_score_matrix.csv` from the CSF script (14), and reuses the CSF layout so that both shared-protein figures place the nodes in the same positions. Run 14 before 15.
 - **Expected checkpoints.** The scripts contain `stopifnot()` checks against the published run: 5,731 RNA-seq samples after QC (scripts 02 and 04) and 13 DEGs (script 03). If one of them fails, the input data or package versions differ from the original analysis.
 - **Runtime.** Script 02 (DESeq2 on about 5,700 samples) is the slowest step. It runs in parallel with 8 workers (`MulticoreParam(workers = 8)`); change this to suit your machine.
