@@ -13,7 +13,7 @@ library(utils)
 setwd(here::here("results/proteomics/"))
 
 #Run required previous scripts
-source(here::here("R/network_layout.R"))
+source(here::here("resources/network_layout.R"))
 source(here::here("clinical_processing/clinical_data.R"))
 
 

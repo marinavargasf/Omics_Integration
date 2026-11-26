@@ -26,7 +26,7 @@ Omics_Integration/
 │   ├── 01_transcriptomics_preprocessing_QC.R
 │   ├── ...
 │   └── 16_DDC_UPDRS4_followup.R
-├── R/
+├── resources/
 │   └── network_layout.R           # shared qgraph layout and edge helpers (sourced by 12, 14, 15)
 ├── resources/                     # small fixed reference files, no participant data (see resources/README.md)
 ├── clinical_processing/

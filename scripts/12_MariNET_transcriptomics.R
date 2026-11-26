@@ -16,7 +16,7 @@ stopifnot(packageVersion("MariNET") >= "2.0.0")
 #Run required previous scripts
 
 source(here::here("clinical_processing/clinical_data.R"))
-source(here::here("R/network_layout.R"))
+source(here::here("resources/network_layout.R"))
 
 #1. Collect and filter data 
 data_normalized <- as.data.frame(readRDS(here::here("results/transcriptomics/deseq2/normalized_expression_genesymbol.rds")))

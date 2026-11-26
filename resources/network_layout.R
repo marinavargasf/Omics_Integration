@@ -2,7 +2,7 @@
 # Shared qgraph layout and edge helpers for all network figures
 # (CSF, PLA, pathways).
 #
-#   source(here::here("R/network_layout.R"))
+#   source(here::here("resources/network_layout.R"))
 ################################################################################
 
 library(qgraph)
